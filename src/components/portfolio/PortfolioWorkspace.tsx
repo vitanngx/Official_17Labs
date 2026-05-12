@@ -1,11 +1,19 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import React from "react";
 import PortfolioTrackerTab from "@/components/portfolio/PortfolioTrackerTab";
 import StrategyTab from "@/components/portfolio/StrategyTab";
 
 type ActiveTab = "strategy" | "reality";
 type ThemeMode = "light" | "dark";
+type ToastTone = "error" | "success" | "info";
+
+interface ToastMessage {
+  id: string;
+  message: string;
+  tone: ToastTone;
+}
 
 const WORKSPACE_STORAGE_KEY = "official.workspace.v1";
 
@@ -13,6 +21,7 @@ export default function PortfolioWorkspace() {
   const [activeTab, setActiveTab] = React.useState<ActiveTab>("strategy");
   const [optimizedWeights, setOptimizedWeights] = React.useState<Record<string, number>>({});
   const [theme, setTheme] = React.useState<ThemeMode>("light");
+  const [toasts, setToasts] = React.useState<ToastMessage[]>([]);
   const [hydrated, setHydrated] = React.useState(false);
 
   React.useEffect(() => {
@@ -57,6 +66,14 @@ export default function PortfolioWorkspace() {
     }
   }, [activeTab, hydrated, optimizedWeights, theme]);
 
+  const notify = React.useCallback((message: string, tone: ToastTone = "info") => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setToasts((current) => [...current, { id, message, tone }].slice(-3));
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, tone === "error" ? 6000 : 3600);
+  }, []);
+
   return (
     <main className="min-h-screen bg-[var(--surface)] text-[var(--text)]" data-theme={theme}>
       <nav className="sticky top-0 z-10 border-b-2 border-[var(--border)] bg-[var(--surface)] px-4 py-3 md:px-8">
@@ -88,11 +105,23 @@ export default function PortfolioWorkspace() {
         </div>
       </nav>
 
-      {activeTab === "strategy" ? (
-        <StrategyTab onOptimizedWeightsChange={setOptimizedWeights} />
-      ) : (
-        <PortfolioTrackerTab optimizedWeights={optimizedWeights} />
-      )}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 12 }}
+          transition={{ duration: 0.22, ease: "easeOut" }}
+        >
+          {activeTab === "strategy" ? (
+            <StrategyTab onNotify={notify} onOptimizedWeightsChange={setOptimizedWeights} />
+          ) : (
+            <PortfolioTrackerTab optimizedWeights={optimizedWeights} onNotify={notify} />
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      <ToastStack toasts={toasts} />
     </main>
   );
 }
@@ -139,5 +168,35 @@ function ModeButton({
     >
       {children}
     </button>
+  );
+}
+
+function ToastStack({ toasts }: { toasts: ToastMessage[] }) {
+  return (
+    <div className="fixed right-4 top-24 z-50 flex w-[min(420px,calc(100vw-32px))] flex-col gap-3">
+      <AnimatePresence>
+        {toasts.map((toast) => (
+          <motion.div
+            key={toast.id}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            className={`rounded border-2 border-[var(--border)] px-4 py-3 font-bold shadow-[5px_5px_0_var(--shadow)] ${
+              toast.tone === "error"
+                ? "bg-[var(--danger)] text-white"
+                : toast.tone === "success"
+                  ? "bg-[var(--success)] text-white"
+                  : "bg-[var(--panel)] text-[var(--text)]"
+            }`}
+            exit={{ opacity: 0, x: 24, scale: 0.98 }}
+            initial={{ opacity: 0, x: 24, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            <p className="font-mono text-[13px] font-black uppercase">
+              {toast.tone === "error" ? "Action needed" : "Update"}
+            </p>
+            <p className="mt-1 text-[14px]">{toast.message}</p>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
   );
 }

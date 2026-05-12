@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import React from "react";
 import {
   Cell,
@@ -18,6 +19,7 @@ import {
 } from "@/types/reality";
 
 interface PortfolioTrackerTabProps {
+  onNotify?: (message: string, tone?: "error" | "success" | "info") => void;
   optimizedWeights: Record<string, number>;
 }
 
@@ -59,6 +61,7 @@ const FIELD_CLASS =
   "h-12 w-full rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] px-3 text-[15px] font-bold outline-none focus:shadow-[0_0_0_3px_var(--primary)]";
 
 export default function PortfolioTrackerTab({
+  onNotify,
   optimizedWeights
 }: PortfolioTrackerTabProps) {
   const [baseCurrency, setBaseCurrency] = React.useState("USD");
@@ -154,7 +157,10 @@ export default function PortfolioTrackerTab({
       setTransactions(transactionsPayload.transactions ?? []);
       setReality(realityPayload);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load portfolio.");
+      const message =
+        loadError instanceof Error ? loadError.message : "Unable to load portfolio.";
+      setError(message);
+      onNotify?.(message, "error");
     } finally {
       setLoading(false);
     }
@@ -188,13 +194,16 @@ export default function PortfolioTrackerTab({
     const payload = (await response.json()) as { ok: boolean; error?: string };
 
     if (!response.ok || !payload.ok) {
-      setError(payload.error ?? "Unable to save transaction.");
+      const message = payload.error ?? "Unable to save transaction.";
+      setError(message);
+      onNotify?.(message, "error");
       return;
     }
 
     setDraft(createDraft());
     setEditingId(null);
     await refresh();
+    onNotify?.(editingId ? "Transaction updated." : "Transaction added.", "success");
   }
 
   function startEdit(transaction: PortfolioTransaction) {
@@ -212,10 +221,17 @@ export default function PortfolioTrackerTab({
   }
 
   async function deleteRow(id: string) {
-    await fetch(`/api/portfolio/transactions?id=${id}`, {
+    const response = await fetch(`/api/portfolio/transactions?id=${id}`, {
       method: "DELETE"
     });
+
+    if (!response.ok) {
+      onNotify?.("Unable to delete transaction.", "error");
+      return;
+    }
+
     await refresh();
+    onNotify?.("Transaction deleted.", "success");
   }
 
   return (
@@ -588,9 +604,20 @@ function RiskMetricCard({
 
 function PiePanel({ title, data }: { title: string; data: AllocationSlice[] }) {
   return (
-    <section className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
+    <motion.section
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]"
+      initial={{ opacity: 0, y: 10 }}
+      transition={{ duration: 0.24, ease: "easeOut" }}
+    >
       <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">{title}</p>
-      <div className="mt-4 h-[320px] rounded border-2 border-[var(--border)] bg-[var(--panel-soft)]">
+      <motion.div
+        key={`${title}-${data.map((slice) => `${slice.name}:${slice.weightPct.toFixed(2)}`).join("|")}`}
+        animate={{ opacity: 1, scale: 1 }}
+        className="mt-4 h-[320px] rounded border-2 border-[var(--border)] bg-[var(--panel-soft)]"
+        initial={{ opacity: 0, scale: 0.985 }}
+        transition={{ duration: 0.22, ease: "easeOut" }}
+      >
         {data.length ? (
           <ResponsiveContainer height="100%" width="100%">
             <PieChart>
@@ -620,8 +647,8 @@ function PiePanel({ title, data }: { title: string; data: AllocationSlice[] }) {
             No allocation data.
           </div>
         )}
-      </div>
-    </section>
+      </motion.div>
+    </motion.section>
   );
 }
 

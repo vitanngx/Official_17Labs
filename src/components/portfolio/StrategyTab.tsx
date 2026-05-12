@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import React from "react";
 import {
   CartesianGrid,
@@ -43,6 +44,7 @@ interface OptimizationResponse {
 }
 
 interface StrategyTabProps {
+  onNotify?: (message: string, tone?: "error" | "success" | "info") => void;
   onOptimizedWeightsChange?: (weights: Record<string, number>) => void;
 }
 
@@ -88,7 +90,7 @@ const DEFAULT_ASSETS: AssetUniverseItem[] = [
   { asset: "ETH-USD", assetClass: "CRYPTO", currency: "USD" }
 ];
 
-export default function StrategyTab({ onOptimizedWeightsChange }: StrategyTabProps) {
+export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: StrategyTabProps) {
   const [startDate, setStartDate] = React.useState(DEFAULT_START_DATE);
   const [riskProfile, setRiskProfile] = React.useState<RiskProfile>("Balanced");
   const [riskFreeRate, setRiskFreeRate] = React.useState("0.05");
@@ -194,13 +196,16 @@ export default function StrategyTab({ onOptimizedWeightsChange }: StrategyTabPro
       }
 
       setResult(payload);
+      onNotify?.("Optimization complete. Target weights are ready.", "success");
       onOptimizedWeightsChange?.(
         (payload.targetPortfolio ?? payload.bestPortfolio)?.weights ?? {}
       );
     } catch (runError) {
       setResult(null);
       onOptimizedWeightsChange?.({});
-      setError(runError instanceof Error ? runError.message : "Optimization failed.");
+      const message = runError instanceof Error ? runError.message : "Optimization failed.";
+      setError(message);
+      onNotify?.(message, "error");
     } finally {
       setLoading(false);
     }
@@ -275,8 +280,12 @@ export default function StrategyTab({ onOptimizedWeightsChange }: StrategyTabPro
       );
       setResult(null);
       onOptimizedWeightsChange?.({});
+      onNotify?.("Current holdings synced into the Strategy asset universe.", "success");
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : "Unable to sync holdings.");
+      const message =
+        syncError instanceof Error ? syncError.message : "Unable to sync holdings.";
+      setError(message);
+      onNotify?.(message, "error");
     } finally {
       setSyncingHoldings(false);
     }
@@ -466,7 +475,13 @@ export default function StrategyTab({ onOptimizedWeightsChange }: StrategyTabPro
               ) : null}
             </div>
 
-            <div className="mt-5 h-[420px] rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-3">
+            <motion.div
+              key={`frontier-${result?.efficientFrontier?.length ?? 0}-${selectedPortfolio?.sharpeRatio ?? "empty"}`}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-5 h-[420px] rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-3"
+              initial={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.24, ease: "easeOut" }}
+            >
               {result?.efficientFrontier?.length ? (
                 <ResponsiveContainer height="100%" width="100%">
                   <ScatterChart margin={{ top: 16, right: 18, bottom: 12, left: 8 }}>
@@ -512,7 +527,7 @@ export default function StrategyTab({ onOptimizedWeightsChange }: StrategyTabPro
                   Configure the strategy and run the optimizer.
                 </div>
               )}
-            </div>
+            </motion.div>
           </section>
 
           <section className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
