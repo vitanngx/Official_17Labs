@@ -16,13 +16,17 @@ Input is read from stdin. Expected payload:
   "optimizationGoal": "max_sharpe",
   "targetReturn": 0.2,
   "targetTolerance": 0.02,
-  "numPortfolios": 10000,
+  "numPortfolios": 3000,
   "randomSeed": 42
 }
 
 The "prices" field may also be a dict in pandas DataFrame-compatible shapes. If
 "prices" is omitted, the bridge attempts to download history for assetUniverse
 with yfinance.
+
+Uses a hybrid approach: Monte Carlo simulation for frontier visualization,
+and scipy-based constrained optimization for more precise deterministic
+portfolio selection (max Sharpe and target return goals).
 """
 
 from __future__ import annotations
@@ -51,6 +55,13 @@ except Exception as exc:  # pragma: no cover - dependency guard for bridge calle
     )
     sys.exit(0)
 
+try:
+    from scipy.optimize import minimize as scipy_minimize
+
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
 
 TRADING_DAYS_PER_YEAR = 252
 RISK_PROFILES = {
@@ -76,12 +87,14 @@ def main() -> None:
         result = optimize(payload)
         print(json.dumps(result, allow_nan=False))
     except Exception as exc:
+        # Log full traceback to stderr for local/FastAPI debugging.
+        print(traceback.format_exc(limit=6), file=sys.stderr)
         print(
             json.dumps(
                 {
                     "ok": False,
                     "error": "Python optimizer failed.",
-                    "details": [str(exc), traceback.format_exc(limit=4)],
+                    "details": [str(exc)],
                 }
             )
         )
@@ -98,7 +111,7 @@ def optimize(payload: dict[str, Any]) -> dict[str, Any]:
     target_tolerance = float(payload.get("targetTolerance", 0.02))
     risk_profile = str(payload.get("riskProfile", "Balanced"))
     optimization_goal = str(payload.get("optimizationGoal", "max_sharpe"))
-    num_portfolios = int(payload.get("numPortfolios", 10000))
+    num_portfolios = int(payload.get("numPortfolios", 3000))
     random_seed = payload.get("randomSeed", 42)
     if num_portfolios < 100:
         raise ValueError("numPortfolios must be at least 100.")
@@ -124,15 +137,49 @@ def optimize(payload: dict[str, Any]) -> dict[str, Any]:
         num_portfolios=num_portfolios,
         random_seed=random_seed,
     )
-    target_portfolio = select_target_portfolio(
+
+    # --- Scipy-based precise portfolio selection (with Monte Carlo fallback) ---
+    mc_best = frontier["bestPortfolio"]
+    mc_target = select_target_portfolio(
         points=frontier["points"],
         target_return=target_return,
         target_tolerance=target_tolerance,
     )
+
+    best_portfolio = mc_best
+    target_portfolio = mc_target
+
+    if SCIPY_AVAILABLE:
+        tickers = list(annual_returns.index)
+        max_w, min_w = get_weight_constraints(len(tickers))
+
+        scipy_best = find_max_sharpe_scipy(
+            annual_returns=annual_returns,
+            covariance=covariance,
+            risk_free_rate=risk_free_rate,
+            tickers=tickers,
+            min_weight=min_w,
+            max_weight=max_w,
+        )
+        if scipy_best is not None:
+            best_portfolio = scipy_best
+
+        scipy_target = find_min_volatility_for_target_scipy(
+            annual_returns=annual_returns,
+            covariance=covariance,
+            tickers=tickers,
+            target_return=target_return,
+            target_tolerance=target_tolerance,
+            min_weight=min_w,
+            max_weight=max_w,
+        )
+        if scipy_target is not None:
+            target_portfolio = scipy_target
+
     selected_portfolio = (
         target_portfolio
         if optimization_goal == "target_return" and target_portfolio is not None
-        else frontier["bestPortfolio"]
+        else best_portfolio
     )
 
     return {
@@ -147,7 +194,7 @@ def optimize(payload: dict[str, Any]) -> dict[str, Any]:
         "weightConstraints": frontier["weightConstraints"],
         "assetRanking": ranking,
         "efficientFrontier": frontier["points"],
-        "bestPortfolio": frontier["bestPortfolio"],
+        "bestPortfolio": best_portfolio,
         "targetPortfolio": target_portfolio,
         "selectedPortfolio": selected_portfolio,
     }
@@ -452,6 +499,135 @@ def select_target_portfolio(
         return None
 
     return min(candidates, key=lambda point: point["volatility"] or float("inf"))
+
+
+# ---------------------------------------------------------------------------
+# Scipy-based constrained optimization (more precise deterministic optimizer)
+# ---------------------------------------------------------------------------
+
+
+def find_max_sharpe_scipy(
+    annual_returns: pd.Series,
+    covariance: pd.DataFrame,
+    risk_free_rate: float,
+    tickers: list[str],
+    min_weight: float,
+    max_weight: float,
+) -> dict[str, Any] | None:
+    """Find the portfolio with the highest Sharpe ratio using SLSQP.
+
+    Maximizing Sharpe is equivalent to minimizing the negative Sharpe ratio.
+    Falls back to None if the solver fails so Monte Carlo results are used instead.
+    """
+    n = len(tickers)
+    if n < 2:
+        return None
+
+    mean_returns = annual_returns.values.astype(float)
+    cov_matrix = covariance.values.astype(float)
+
+    def neg_sharpe(weights: np.ndarray) -> float:
+        port_return = float(weights @ mean_returns)
+        port_vol = float(np.sqrt(weights @ cov_matrix @ weights))
+        if port_vol < 1e-12:
+            return 1e12
+        return -(port_return - risk_free_rate) / port_vol
+
+    constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
+    bounds = [(min_weight, max_weight)] * n
+    initial_weights = np.full(n, 1.0 / n)
+
+    try:
+        result = scipy_minimize(
+            neg_sharpe,
+            initial_weights,
+            method="SLSQP",
+            bounds=bounds,
+            constraints=constraints,
+            options={"maxiter": 1000, "ftol": 1e-12},
+        )
+        if not result.success:
+            return None
+
+        weights = result.x
+        port_return = float(weights @ mean_returns)
+        port_vol = float(np.sqrt(weights @ cov_matrix @ weights))
+        sharpe = (port_return - risk_free_rate) / port_vol if port_vol > 0 else float("nan")
+
+        return clean_record(
+            {
+                "expectedReturn": port_return,
+                "volatility": port_vol,
+                "sharpeRatio": sharpe,
+                "weights": {t: float(w) for t, w in zip(tickers, weights)},
+            }
+        )
+    except Exception:
+        return None
+
+
+def find_min_volatility_for_target_scipy(
+    annual_returns: pd.Series,
+    covariance: pd.DataFrame,
+    tickers: list[str],
+    target_return: float,
+    target_tolerance: float,
+    min_weight: float,
+    max_weight: float,
+) -> dict[str, Any] | None:
+    """Find the minimum-volatility portfolio whose return falls within the target range.
+
+    Uses the constraint: target_return - tolerance <= portfolio_return <= target_return + tolerance.
+    Falls back to None if the target is infeasible so Monte Carlo results are used instead.
+    """
+    n = len(tickers)
+    if n < 2:
+        return None
+
+    mean_returns = annual_returns.values.astype(float)
+    cov_matrix = covariance.values.astype(float)
+
+    def portfolio_volatility(weights: np.ndarray) -> float:
+        return float(np.sqrt(weights @ cov_matrix @ weights))
+
+    constraints = [
+        {"type": "eq", "fun": lambda w: np.sum(w) - 1.0},
+        # Return must be >= target - tolerance
+        {"type": "ineq", "fun": lambda w: float(w @ mean_returns) - (target_return - target_tolerance)},
+        # Return must be <= target + tolerance
+        {"type": "ineq", "fun": lambda w: (target_return + target_tolerance) - float(w @ mean_returns)},
+    ]
+    bounds = [(min_weight, max_weight)] * n
+    initial_weights = np.full(n, 1.0 / n)
+
+    try:
+        result = scipy_minimize(
+            portfolio_volatility,
+            initial_weights,
+            method="SLSQP",
+            bounds=bounds,
+            constraints=constraints,
+            options={"maxiter": 1000, "ftol": 1e-12},
+        )
+        if not result.success:
+            # Target return is likely infeasible; fall back to Monte Carlo.
+            return None
+
+        weights = result.x
+        port_return = float(weights @ mean_returns)
+        port_vol = float(np.sqrt(weights @ cov_matrix @ weights))
+        sharpe = (port_return - 0.0) / port_vol if port_vol > 0 else float("nan")
+
+        return clean_record(
+            {
+                "expectedReturn": port_return,
+                "volatility": port_vol,
+                "sharpeRatio": sharpe,
+                "weights": {t: float(w) for t, w in zip(tickers, weights)},
+            }
+        )
+    except Exception:
+        return None
 
 
 def safe_number(value: float) -> float:
