@@ -14,6 +14,7 @@ import {
 } from "recharts";
 
 type RiskProfile = "Conservative" | "Balanced" | "Aggressive";
+type OptimizationGoal = "max_sharpe" | "target_return";
 
 interface AssetUniverseItem {
   asset: string;
@@ -33,6 +34,7 @@ interface OptimizationResponse {
   error?: string;
   details?: string[];
   riskProfile?: RiskProfile;
+  optimizationGoal?: OptimizationGoal;
   targetReturn?: number;
   weightConstraints?: {
     minWeight: number;
@@ -40,6 +42,7 @@ interface OptimizationResponse {
   };
   efficientFrontier?: FrontierPoint[];
   bestPortfolio?: FrontierPoint;
+  selectedPortfolio?: FrontierPoint;
   targetPortfolio?: FrontierPoint | null;
 }
 
@@ -51,6 +54,7 @@ interface StrategyTabProps {
 interface PersistedStrategyState {
   startDate: string;
   riskProfile: RiskProfile;
+  optimizationGoal?: OptimizationGoal;
   riskFreeRate: string;
   targetReturn: string;
   targetTolerance: string;
@@ -80,8 +84,12 @@ interface RealityResponse {
 }
 
 const RISK_PROFILES: RiskProfile[] = ["Conservative", "Balanced", "Aggressive"];
-const STRATEGY_RESULT_VERSION = 2;
-const STRATEGY_STORAGE_KEY = "official.strategyTab.v2";
+const OPTIMIZATION_GOALS: Array<{ label: string; value: OptimizationGoal }> = [
+  { label: "Best Risk-Adjusted Return", value: "max_sharpe" },
+  { label: "Target Return", value: "target_return" }
+];
+const STRATEGY_RESULT_VERSION = 3;
+const STRATEGY_STORAGE_KEY = "official.strategyTab.v3";
 const DEFAULT_START_DATE = "2020-01-01";
 const DEFAULT_ASSETS: AssetUniverseItem[] = [
   { asset: "AAPL", assetClass: "US_STOCK", currency: "USD" },
@@ -93,6 +101,8 @@ const DEFAULT_ASSETS: AssetUniverseItem[] = [
 export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: StrategyTabProps) {
   const [startDate, setStartDate] = React.useState(DEFAULT_START_DATE);
   const [riskProfile, setRiskProfile] = React.useState<RiskProfile>("Balanced");
+  const [optimizationGoal, setOptimizationGoal] =
+    React.useState<OptimizationGoal>("max_sharpe");
   const [riskFreeRate, setRiskFreeRate] = React.useState("0.05");
   const [targetReturn, setTargetReturn] = React.useState("0.20");
   const [targetTolerance, setTargetTolerance] = React.useState("0.02");
@@ -104,7 +114,12 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
   const [syncingHoldings, setSyncingHoldings] = React.useState(false);
   const [hydrated, setHydrated] = React.useState(false);
 
-  const selectedPortfolio = result?.targetPortfolio ?? result?.bestPortfolio ?? null;
+  const selectedPortfolio =
+    result?.selectedPortfolio ??
+    (optimizationGoal === "target_return"
+      ? result?.targetPortfolio ?? result?.bestPortfolio
+      : result?.bestPortfolio) ??
+    null;
   const weightRows = React.useMemo(() => {
     if (!selectedPortfolio) {
       return [];
@@ -124,6 +139,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
     if (saved) {
       setStartDate(saved.startDate);
       setRiskProfile(saved.riskProfile);
+      setOptimizationGoal(saved.optimizationGoal ?? "max_sharpe");
       setRiskFreeRate(saved.riskFreeRate);
       setTargetReturn(saved.targetReturn);
       setTargetTolerance(saved.targetTolerance);
@@ -131,7 +147,8 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       setAssetUniverse(saved.assetUniverse);
       setResult(saved.result);
       onOptimizedWeightsChange?.(
-        (saved.result?.targetPortfolio ?? saved.result?.bestPortfolio)?.weights ?? {}
+        (saved.result?.selectedPortfolio ?? saved.result?.targetPortfolio ?? saved.result?.bestPortfolio)
+          ?.weights ?? {}
       );
     }
     setHydrated(true);
@@ -148,6 +165,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
     persistStrategyState({
       startDate,
       riskProfile,
+      optimizationGoal,
       riskFreeRate,
       targetReturn,
       targetTolerance,
@@ -159,6 +177,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
     assetUniverse,
     hydrated,
     numPortfolios,
+    optimizationGoal,
     result,
     riskFreeRate,
     riskProfile,
@@ -181,6 +200,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
         body: JSON.stringify({
           startDate,
           riskProfile,
+          optimizationGoal,
           riskFreeRate: Number(riskFreeRate),
           targetReturn: Number(targetReturn),
           targetTolerance: Number(targetTolerance),
@@ -198,7 +218,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       setResult(payload);
       onNotify?.("Optimization complete. Target weights are ready.", "success");
       onOptimizedWeightsChange?.(
-        (payload.targetPortfolio ?? payload.bestPortfolio)?.weights ?? {}
+        (payload.selectedPortfolio ?? payload.targetPortfolio ?? payload.bestPortfolio)?.weights ?? {}
       );
     } catch (runError) {
       setResult(null);
@@ -226,6 +246,9 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       if (run.config?.riskProfile && RISK_PROFILES.includes(run.config.riskProfile)) {
         setRiskProfile(run.config.riskProfile);
       }
+      if (run.config?.optimizationGoal === "max_sharpe" || run.config?.optimizationGoal === "target_return") {
+        setOptimizationGoal(run.config.optimizationGoal);
+      }
       if (run.config?.startDate !== undefined) {
         setStartDate(String(run.config.startDate));
       }
@@ -246,7 +269,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       }
       setResult(run.result);
       onOptimizedWeightsChange?.(
-        (run.result.targetPortfolio ?? run.result.bestPortfolio)?.weights ?? {}
+        (run.result.selectedPortfolio ?? run.result.targetPortfolio ?? run.result.bestPortfolio)?.weights ?? {}
       );
     } catch {
       // Latest runs are a convenience; local defaults still work without them.
@@ -353,6 +376,28 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
               </select>
             </label>
 
+            <div>
+              <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
+                Optimization Goal
+              </span>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {OPTIMIZATION_GOALS.map((goal) => (
+                  <button
+                    key={goal.value}
+                    className={`min-h-12 rounded border-2 border-[var(--border)] px-3 py-2 font-mono text-[13px] font-black uppercase shadow-[4px_4px_0_var(--shadow)] active:translate-x-1 active:translate-y-1 active:shadow-none ${
+                      optimizationGoal === goal.value
+                        ? "bg-[var(--primary)] text-[#1C293C]"
+                        : "bg-[var(--panel)]"
+                    }`}
+                    type="button"
+                    onClick={() => setOptimizationGoal(goal.value)}
+                  >
+                    {goal.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <PercentControl
               label="Risk-free Rate"
               maxPercent={50}
@@ -364,6 +409,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
 
             <PercentControl
               label="Target Return"
+              disabled={optimizationGoal !== "target_return"}
               maxPercent={500}
               minPercent={-100}
               stepPercent={1}
@@ -373,6 +419,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
 
             <PercentControl
               label="Target Tolerance"
+              disabled={optimizationGoal !== "target_return"}
               maxPercent={100}
               minPercent={0}
               stepPercent={0.5}
@@ -575,6 +622,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
 }
 
 function PercentControl({
+  disabled = false,
   label,
   maxPercent,
   minPercent,
@@ -582,6 +630,7 @@ function PercentControl({
   stepPercent,
   value
 }: {
+  disabled?: boolean;
   label: string;
   maxPercent: number;
   minPercent: number;
@@ -615,9 +664,14 @@ function PercentControl({
       <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
         {label}
       </span>
-      <div className="flex h-12 overflow-hidden rounded border-2 border-[var(--border)] bg-[var(--panel-soft)]">
+      <div
+        className={`flex h-12 overflow-hidden rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] ${
+          disabled ? "opacity-45" : ""
+        }`}
+      >
         <input
           className="min-w-0 flex-1 bg-transparent px-3 font-mono text-[15px] font-bold outline-none"
+          disabled={disabled}
           inputMode="decimal"
           max={maxPercent}
           min={minPercent}
@@ -631,6 +685,7 @@ function PercentControl({
         </span>
         <button
           className="w-12 border-l-2 border-[var(--border)] font-mono text-[17px] font-black hover:bg-[var(--primary)] hover:text-[#1C293C]"
+          disabled={disabled}
           type="button"
           onClick={() => nudge(-1)}
         >
@@ -638,6 +693,7 @@ function PercentControl({
         </button>
         <button
           className="w-12 border-l-2 border-[var(--border)] font-mono text-[17px] font-black hover:bg-[var(--primary)] hover:text-[#1C293C]"
+          disabled={disabled}
           type="button"
           onClick={() => nudge(1)}
         >
@@ -743,6 +799,10 @@ function readPersistedStrategyState(): PersistedStrategyState | null {
     return {
       startDate: parsed.startDate ?? DEFAULT_START_DATE,
       riskProfile: parsed.riskProfile,
+      optimizationGoal:
+        parsed.optimizationGoal === "target_return" || parsed.optimizationGoal === "max_sharpe"
+          ? parsed.optimizationGoal
+          : "max_sharpe",
       riskFreeRate: parsed.riskFreeRate ?? "0.05",
       targetReturn: parsed.targetReturn ?? "0.20",
       targetTolerance: parsed.targetTolerance ?? "0.02",

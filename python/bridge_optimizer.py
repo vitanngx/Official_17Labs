@@ -13,6 +13,7 @@ Input is read from stdin. Expected payload:
   ],
   "riskFreeRate": 0.05,
   "riskProfile": "Balanced",
+  "optimizationGoal": "max_sharpe",
   "targetReturn": 0.2,
   "targetTolerance": 0.02,
   "numPortfolios": 10000,
@@ -96,6 +97,7 @@ def optimize(payload: dict[str, Any]) -> dict[str, Any]:
     target_return = float(payload.get("targetReturn", 0.2))
     target_tolerance = float(payload.get("targetTolerance", 0.02))
     risk_profile = str(payload.get("riskProfile", "Balanced"))
+    optimization_goal = str(payload.get("optimizationGoal", "max_sharpe"))
     num_portfolios = int(payload.get("numPortfolios", 10000))
     random_seed = payload.get("randomSeed", 42)
     if num_portfolios < 100:
@@ -127,6 +129,11 @@ def optimize(payload: dict[str, Any]) -> dict[str, Any]:
         target_return=target_return,
         target_tolerance=target_tolerance,
     )
+    selected_portfolio = (
+        target_portfolio
+        if optimization_goal == "target_return" and target_portfolio is not None
+        else frontier["bestPortfolio"]
+    )
 
     return {
         "ok": True,
@@ -134,6 +141,7 @@ def optimize(payload: dict[str, Any]) -> dict[str, Any]:
         "observationCount": int(prices.shape[0]),
         "riskFreeRate": risk_free_rate,
         "riskProfile": risk_profile,
+        "optimizationGoal": optimization_goal,
         "targetReturn": target_return,
         "targetTolerance": target_tolerance,
         "weightConstraints": frontier["weightConstraints"],
@@ -141,6 +149,7 @@ def optimize(payload: dict[str, Any]) -> dict[str, Any]:
         "efficientFrontier": frontier["points"],
         "bestPortfolio": frontier["bestPortfolio"],
         "targetPortfolio": target_portfolio,
+        "selectedPortfolio": selected_portfolio,
     }
 
 
@@ -275,15 +284,20 @@ def get_weight_constraints(n_assets: int) -> tuple[float, float]:
         return (1.0, 1.0)
 
     constraints = {
-        2: (0.80, 0.00),
-        3: (0.60, 0.20),
-        4: (0.55, 0.15),
-        5: (0.50, 0.12),
-        6: (0.45, 0.10),
-        7: (0.40, 0.10),
-        8: (0.35, 0.08),
-        9: (0.30, 0.06),
-        10: (0.25, 0.04),
+        2: (0.70, 0.00),
+        3: (0.50, 0.20),
+        4: (0.40, 0.15),
+        5: (0.30, 0.12),
+        6: (0.30, 0.10),
+        7: (0.30, 0.10),
+        8: (0.25, 0.08),
+        9: (0.25, 0.06),
+        10: (0.20, 0.04),
+        11: (0.15, 0.04),
+        12: (0.15, 0.04),
+        13: (0.14, 0.04),
+        14: (0.13, 0.04),
+        15: (0.12, 0.04),
     }
     default_max = min(1.0, 1.0 / n_assets + 0.2)
     return constraints.get(n_assets, (default_max, 0.01))
