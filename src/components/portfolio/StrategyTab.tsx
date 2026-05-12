@@ -353,35 +353,29 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
               </select>
             </label>
 
-            <NumberControl
+            <PercentControl
               label="Risk-free Rate"
-              max={0.5}
-              min={0}
-              step={0.005}
+              maxPercent={50}
+              minPercent={0}
+              stepPercent={0.5}
               value={riskFreeRate}
               onChange={setRiskFreeRate}
             />
 
-            <label className="block">
-              <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
-                Target Return
-              </span>
-              <input
-                className="h-12 w-full rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] px-3 font-mono text-[15px] font-bold outline-none focus:shadow-[0_0_0_3px_var(--primary)]"
-                type="number"
-                min="-1"
-                max="5"
-                step="0.01"
-                value={targetReturn}
-                onChange={(event) => setTargetReturn(event.target.value)}
-              />
-            </label>
+            <PercentControl
+              label="Target Return"
+              maxPercent={500}
+              minPercent={-100}
+              stepPercent={1}
+              value={targetReturn}
+              onChange={setTargetReturn}
+            />
 
-            <NumberControl
+            <PercentControl
               label="Target Tolerance"
-              max={1}
-              min={0}
-              step={0.005}
+              maxPercent={100}
+              minPercent={0}
+              stepPercent={0.5}
               value={targetTolerance}
               onChange={setTargetTolerance}
             />
@@ -580,25 +574,40 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
   );
 }
 
-function NumberControl({
+function PercentControl({
   label,
-  max,
-  min,
+  maxPercent,
+  minPercent,
   onChange,
-  step,
+  stepPercent,
   value
 }: {
   label: string;
-  max: number;
-  min: number;
+  maxPercent: number;
+  minPercent: number;
   onChange: (value: string) => void;
-  step: number;
+  stepPercent: number;
   value: string;
 }) {
+  const displayValue = decimalStringToPercentString(value);
+
   function nudge(direction: 1 | -1) {
-    const current = Number(value);
-    const next = Math.min(max, Math.max(min, (Number.isFinite(current) ? current : 0) + step * direction));
-    onChange(next.toFixed(countDecimals(step)));
+    const current = parseLocaleNumber(displayValue);
+    const next = Math.min(
+      maxPercent,
+      Math.max(minPercent, (Number.isFinite(current) ? current : 0) + stepPercent * direction)
+    );
+    onChange(percentNumberToDecimalString(next));
+  }
+
+  function updateFromDisplay(nextDisplayValue: string) {
+    const parsed = parseLocaleNumber(nextDisplayValue);
+    if (!Number.isFinite(parsed)) {
+      onChange("");
+      return;
+    }
+
+    onChange(percentNumberToDecimalString(parsed));
   }
 
   return (
@@ -609,13 +618,17 @@ function NumberControl({
       <div className="flex h-12 overflow-hidden rounded border-2 border-[var(--border)] bg-[var(--panel-soft)]">
         <input
           className="min-w-0 flex-1 bg-transparent px-3 font-mono text-[15px] font-bold outline-none"
-          max={max}
-          min={min}
-          step={step}
-          type="number"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
+          inputMode="decimal"
+          max={maxPercent}
+          min={minPercent}
+          step={stepPercent}
+          type="text"
+          value={displayValue}
+          onChange={(event) => updateFromDisplay(event.target.value)}
         />
+        <span className="flex w-10 items-center justify-center border-l-2 border-[var(--border)] font-mono text-[15px] font-black">
+          %
+        </span>
         <button
           className="w-12 border-l-2 border-[var(--border)] font-mono text-[17px] font-black hover:bg-[var(--primary)] hover:text-[#1C293C]"
           type="button"
@@ -633,6 +646,27 @@ function NumberControl({
       </div>
     </label>
   );
+}
+
+function decimalStringToPercentString(value: string) {
+  const decimal = Number(value);
+  if (!Number.isFinite(decimal)) {
+    return "";
+  }
+
+  return formatInputNumber(decimal * 100);
+}
+
+function percentNumberToDecimalString(value: number) {
+  return formatInputNumber(value / 100);
+}
+
+function parseLocaleNumber(value: string) {
+  return Number(value.replace(",", "."));
+}
+
+function formatInputNumber(value: number) {
+  return Number(value.toFixed(6)).toString();
 }
 
 function AssetDraftInput({ onAdd }: { onAdd: (asset: string) => void }) {
