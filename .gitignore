@@ -1,0 +1,11 @@
+.DS_Store
+.next/
+node_modules/
+data/
+*.db
+*.sqlite
+*.sqlite3
+tsconfig.tsbuildinfo
+.env
+.env.*
+!.env.example
