@@ -43,7 +43,7 @@ npm install
 Install Python dependencies:
 
 ```bash
-python3 -m pip install numpy pandas yfinance
+python3 -m pip install -r requirements.txt
 ```
 
 Start the development server:
@@ -57,6 +57,22 @@ Open the app:
 ```text
 http://localhost:3000
 ```
+
+## Optional: Fast Python Optimizer
+
+For better optimization speed, run the Python optimizer as a long-running API service:
+
+```bash
+npm run optimizer
+```
+
+In another terminal, start Next.js with:
+
+```bash
+OPTIMIZER_API_URL=http://127.0.0.1:8008 npm run dev
+```
+
+When `OPTIMIZER_API_URL` is set, Next.js calls the FastAPI optimizer over HTTP instead of spawning a new Python process for every optimization request.
 
 ## Useful Commands
 

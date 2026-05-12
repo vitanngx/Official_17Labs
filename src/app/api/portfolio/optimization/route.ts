@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const PYTHON_TIMEOUT_MS = 60_000;
+const OPTIMIZER_API_URL = process.env.OPTIMIZER_API_URL?.trim();
 
 interface OptimizerErrorResponse {
   ok: false;
@@ -43,6 +44,10 @@ export async function POST(request: NextRequest) {
 }
 
 function runOptimizerBridge(payload: unknown): Promise<unknown> {
+  if (OPTIMIZER_API_URL) {
+    return runOptimizerApi(payload);
+  }
+
   const scriptPath = path.join(process.cwd(), "python", "bridge_optimizer.py");
 
   return new Promise((resolve, reject) => {
@@ -110,6 +115,40 @@ function runOptimizerBridge(payload: unknown): Promise<unknown> {
     child.stdin.write(JSON.stringify(payload));
     child.stdin.end();
   });
+}
+
+async function runOptimizerApi(payload: unknown) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PYTHON_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${OPTIMIZER_API_URL}/optimize`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ payload }),
+      cache: "no-store",
+      signal: controller.signal
+    });
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        result?.error ?? `Optimizer API failed with status ${response.status}.`
+      );
+    }
+
+    return result;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Optimization API timed out.");
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function parseOptimizerResponse(stdout: string) {

@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+import time
 import traceback
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -56,6 +57,8 @@ RISK_PROFILES = {
     "Balanced": {"dirichlet_alpha": 1.2},
     "Aggressive": {"dirichlet_alpha": 0.75},
 }
+PRICE_HISTORY_CACHE_TTL_SECONDS = 24 * 60 * 60
+PRICE_HISTORY_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 
 
 @dataclass(frozen=True)
@@ -190,6 +193,14 @@ def download_price_history(assets: list[dict[str, Any]], start_date: str) -> pd.
     if len(symbols) < 2:
         raise ValueError("At least two valid asset symbols are required.")
 
+    cache_key = json.dumps(
+        {"symbols": sorted(symbols), "startDate": start_date},
+        sort_keys=True,
+    )
+    cached = PRICE_HISTORY_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] <= PRICE_HISTORY_CACHE_TTL_SECONDS:
+        return parse_prices(cached[1])
+
     downloaded = yf.download(
         symbols,
         start=start_date,
@@ -208,7 +219,11 @@ def download_price_history(assets: list[dict[str, Any]], start_date: str) -> pd.
     close_prices = close_prices.rename(
         columns={symbol: display_symbol(symbol) for symbol in symbols}
     )
-    return parse_prices(close_prices.reset_index().rename(columns={"Date": "date"}))
+    price_records = close_prices.reset_index().rename(columns={"Date": "date"}).to_dict(
+        orient="records"
+    )
+    PRICE_HISTORY_CACHE[cache_key] = (time.time(), price_records)
+    return parse_prices(price_records)
 
 
 def normalize_yahoo_symbol(asset: dict[str, Any]) -> str:

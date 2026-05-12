@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "optimizer": "uvicorn python.optimizer_server:app --host 127.0.0.1 --port 8008"
   },
   "dependencies": {
     "next": "^14.2.0",
