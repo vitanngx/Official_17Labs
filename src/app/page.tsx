@@ -1,36 +1,28 @@
+"use client";
+
 import Link from "next/link";
+import { useTranslation, LOCALES, LOCALE_LABELS, type Locale } from "@/i18n";
 
 export default function LandingPage() {
+  const { t, locale, setLocale } = useTranslation();
+
   return (
     <div className="min-h-screen bg-[var(--surface)] text-[var(--text)]">
       {/* ── Navbar ── */}
       <nav className="sticky top-0 z-10 border-b-2 border-[var(--border)] bg-[var(--surface)] px-4 py-3 md:px-8">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-[21px] font-black">17 Labs</span>
-            <span className="rounded border-2 border-[var(--border)] bg-[var(--primary)] px-2 py-0.5 font-mono text-[11px] font-black uppercase text-[#1C293C]">
-              Beta
-            </span>
+            <span className="text-[21px] font-black">{t("nav.brand")}</span>
           </div>
           <div className="flex items-center gap-3">
-            <a
-              className="font-mono text-[13px] font-bold uppercase hover:text-[var(--secondary)]"
-              href="#features"
-            >
-              Features
-            </a>
-            <a
-              className="font-mono text-[13px] font-bold uppercase hover:text-[var(--secondary)]"
-              href="#how-it-works"
-            >
-              How It Works
-            </a>
-            <Link
-              className="rounded border-2 border-[var(--border)] bg-[var(--secondary)] px-4 py-2 font-mono text-[13px] font-black uppercase text-white shadow-[4px_4px_0_var(--shadow)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none"
-              href="/dashboard"
-            >
-              Launch App
-            </Link>
+            <a className="font-mono text-[13px] font-bold uppercase hover:text-[var(--secondary)]" href="#features">{t("landing.nav.features")}</a>
+            <a className="font-mono text-[13px] font-bold uppercase hover:text-[var(--secondary)]" href="#how-it-works">{t("landing.nav.howItWorks")}</a>
+            <div className="flex rounded border-2 border-[var(--border)] bg-[var(--panel)] p-0.5 shadow-[3px_3px_0_var(--shadow)]">
+              {LOCALES.map((loc) => (
+                <button key={loc} type="button" onClick={() => setLocale(loc)} className={`rounded px-2 py-1 font-mono text-[11px] font-black transition-colors ${loc === locale ? "bg-[var(--primary)] text-[#1C293C]" : "hover:bg-[var(--panel-soft)]"}`}>{LOCALE_LABELS[loc]}</button>
+              ))}
+            </div>
+            <Link className="rounded border-2 border-[var(--border)] bg-[var(--secondary)] px-4 py-2 font-mono text-[13px] font-black uppercase text-white shadow-[4px_4px_0_var(--shadow)] transition-transform active:translate-x-1 active:translate-y-1 active:shadow-none" href="/dashboard">{t("landing.nav.launchApp")}</Link>
           </div>
         </div>
       </nav>
@@ -49,20 +41,18 @@ export default function LandingPage() {
 
         <div className="relative mx-auto max-w-[1200px]">
           <p className="font-mono text-[13px] font-bold uppercase tracking-widest text-[var(--secondary)]">
-            Portfolio Intelligence Platform
+            {t("landing.hero.subtitle")}
           </p>
 
           <h1 className="mt-4 max-w-[720px] text-[42px] font-black leading-[1.1] md:text-[56px]">
-            Optimize Your Portfolio{" "}
+            {t("landing.hero.title")}{" "}
             <span className="inline-block rounded border-2 border-[var(--border)] bg-[var(--primary)] px-3 text-[#1C293C] shadow-[4px_4px_0_var(--shadow)]">
-              Like a Quant.
+              {t("landing.hero.highlight")}
             </span>
           </h1>
 
           <p className="mt-6 max-w-[560px] text-[17px] font-medium leading-relaxed text-[var(--muted)]">
-            17 Labs uses Modern Portfolio Theory and scipy-based constrained
-            optimization to find your ideal asset allocation — then tracks your
-            real performance in real-time.
+            {t("landing.hero.description")}
           </p>
 
           <div className="mt-10 flex flex-wrap gap-4">
@@ -70,21 +60,21 @@ export default function LandingPage() {
               className="rounded border-2 border-[var(--border)] bg-[var(--primary)] px-8 py-4 font-mono text-[15px] font-black uppercase text-[#1C293C] shadow-[6px_6px_0_var(--shadow)] transition-transform hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none"
               href="/dashboard"
             >
-              Get Started — It&apos;s Free
+              {t("landing.hero.cta")}
             </Link>
             <a
               className="rounded border-2 border-[var(--border)] bg-[var(--panel)] px-8 py-4 font-mono text-[15px] font-black uppercase shadow-[6px_6px_0_var(--shadow)] transition-transform hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none"
               href="#features"
             >
-              Learn More ↓
+              {t("landing.hero.learnMore")}
             </a>
           </div>
 
           {/* Stats row */}
           <div className="mt-16 flex flex-wrap gap-6">
-            <StatBadge label="Optimization Engine" value="Scipy SLSQP" />
-            <StatBadge label="Asset Classes" value="Stocks · Crypto · ETF" />
-            <StatBadge label="Markets" value="US · VN · FR" />
+            <StatBadge label={t("landing.stats.engine.label")} value={t("landing.stats.engine.value")} />
+            <StatBadge label={t("landing.stats.assets.label")} value={t("landing.stats.assets.value")} />
+            <StatBadge label={t("landing.stats.markets.label")} value={t("landing.stats.markets.value")} />
           </div>
         </div>
       </section>
@@ -96,43 +86,19 @@ export default function LandingPage() {
       >
         <div className="mx-auto max-w-[1200px]">
           <p className="font-mono text-[13px] font-bold uppercase tracking-widest text-[var(--secondary)]">
-            Core Features
+            {t("landing.features.subtitle")}
           </p>
           <h2 className="mt-3 text-[35px] font-black">
-            Everything You Need to Invest Smarter
+            {t("landing.features.title")}
           </h2>
 
           <div className="mt-12 grid gap-6 md:grid-cols-3">
-            <FeatureCard
-              description="Find the optimal asset allocation using Markowitz Mean-Variance optimization. Scipy SLSQP solver finds the true maximum Sharpe portfolio with customizable weight constraints."
-              icon="📊"
-              title="Strategy Optimizer"
-            />
-            <FeatureCard
-              description="Track your real holdings, live market prices, P&L, and risk metrics. Compare your actual portfolio against the recommended strategy at a glance."
-              icon="📈"
-              title="Reality Tracker"
-            />
-            <FeatureCard
-              description="Visualize thousands of possible portfolios on the Efficient Frontier scatter plot. See exactly where your optimal portfolio sits on the risk/return map."
-              icon="🎯"
-              title="Efficient Frontier"
-            />
-            <FeatureCard
-              description="Support for US stocks, Vietnamese stocks (.VN), French stocks (.PA), crypto pairs, and ETFs — all in one unified dashboard."
-              icon="🌍"
-              title="Multi-Market Support"
-            />
-            <FeatureCard
-              description="Choose Conservative, Balanced, or Aggressive profiles. Set target returns with tolerance bands. The optimizer respects your risk appetite."
-              icon="⚖️"
-              title="Risk Profiles"
-            />
-            <FeatureCard
-              description="Full transaction ledger with BUY, SELL, CASH_IN, CASH_OUT, DIVIDEND, and TRANSFER support. Accurate cost basis and performance tracking."
-              icon="📋"
-              title="Transaction Ledger"
-            />
+            <FeatureCard icon="📊" title={t("landing.features.optimizer.title")} description={t("landing.features.optimizer.desc")} />
+            <FeatureCard icon="📈" title={t("landing.features.tracker.title")} description={t("landing.features.tracker.desc")} />
+            <FeatureCard icon="🎯" title={t("landing.features.frontier.title")} description={t("landing.features.frontier.desc")} />
+            <FeatureCard icon="🌍" title={t("landing.features.multiMarket.title")} description={t("landing.features.multiMarket.desc")} />
+            <FeatureCard icon="⚖️" title={t("landing.features.risk.title")} description={t("landing.features.risk.desc")} />
+            <FeatureCard icon="📋" title={t("landing.features.ledger.title")} description={t("landing.features.ledger.desc")} />
           </div>
         </div>
       </section>
@@ -143,29 +109,13 @@ export default function LandingPage() {
         id="how-it-works"
       >
         <div className="mx-auto max-w-[1200px]">
-          <p className="font-mono text-[13px] font-bold uppercase tracking-widest text-[var(--secondary)]">
-            How It Works
-          </p>
-          <h2 className="mt-3 text-[35px] font-black">
-            Three Steps to a Smarter Portfolio
-          </h2>
+          <p className="font-mono text-[13px] font-bold uppercase tracking-widest text-[var(--secondary)]">{t("landing.howItWorks.subtitle")}</p>
+          <h2 className="mt-3 text-[35px] font-black">{t("landing.howItWorks.title")}</h2>
 
           <div className="mt-12 grid gap-6 md:grid-cols-3">
-            <StepCard
-              description="Add your stocks, crypto, and ETFs to the asset universe. Or sync directly from your existing holdings in the Reality tab."
-              step="01"
-              title="Choose Your Assets"
-            />
-            <StepCard
-              description="Select your risk profile, set your target return, and hit 'Find My Optimal Mix'. The scipy optimizer + Monte Carlo simulation does the rest."
-              step="02"
-              title="Run the Optimizer"
-            />
-            <StepCard
-              description="Log your actual trades in the Reality tab. Compare your live portfolio against the recommended allocation and rebalance when needed."
-              step="03"
-              title="Track & Rebalance"
-            />
+            <StepCard step="01" title={t("landing.howItWorks.step1.title")} description={t("landing.howItWorks.step1.desc")} />
+            <StepCard step="02" title={t("landing.howItWorks.step2.title")} description={t("landing.howItWorks.step2.desc")} />
+            <StepCard step="03" title={t("landing.howItWorks.step3.title")} description={t("landing.howItWorks.step3.desc")} />
           </div>
         </div>
       </section>
@@ -173,52 +123,21 @@ export default function LandingPage() {
       {/* ── Tech Stack ── */}
       <section className="border-b-2 border-[var(--border)] px-4 py-20 md:px-8">
         <div className="mx-auto max-w-[1200px]">
-          <p className="font-mono text-[13px] font-bold uppercase tracking-widest text-[var(--secondary)]">
-            Under the Hood
-          </p>
-          <h2 className="mt-3 text-[35px] font-black">
-            Built with Serious Tech
-          </h2>
-
+          <p className="font-mono text-[13px] font-bold uppercase tracking-widest text-[var(--secondary)]">{t("landing.tech.subtitle")}</p>
+          <h2 className="mt-3 text-[35px] font-black">{t("landing.tech.title")}</h2>
           <div className="mt-12 flex flex-wrap gap-3">
-            <TechBadge label="Next.js 14" />
-            <TechBadge label="React 18" />
-            <TechBadge label="TypeScript" />
-            <TechBadge label="Python 3" />
-            <TechBadge label="NumPy" />
-            <TechBadge label="Pandas" />
-            <TechBadge label="Scipy Optimize" />
-            <TechBadge label="SQLite" />
-            <TechBadge label="Recharts" />
-            <TechBadge label="Tailwind CSS" />
+            {["Next.js 14","React 18","TypeScript","Python 3","NumPy","Pandas","Scipy Optimize","SQLite","Recharts","Tailwind CSS"].map(l=><TechBadge key={l} label={l}/>)}
           </div>
-
-          <p className="mt-8 max-w-[560px] text-[15px] leading-relaxed text-[var(--muted)]">
-            Powered by{" "}
-            <strong>Modern Portfolio Theory (Markowitz, 1952)</strong>.
-            The optimizer uses scipy&apos;s SLSQP solver for precise constrained
-            optimization, backed by Monte Carlo simulation for frontier
-            visualization.
-          </p>
+          <p className="mt-8 max-w-[560px] text-[15px] leading-relaxed text-[var(--muted)]">{t("landing.tech.description")}</p>
         </div>
       </section>
 
       {/* ── CTA Section ── */}
       <section className="border-b-2 border-[var(--border)] bg-[var(--secondary)] px-4 py-20 text-white md:px-8">
         <div className="mx-auto max-w-[1200px] text-center">
-          <h2 className="text-[35px] font-black md:text-[42px]">
-            Ready to Optimize Your Portfolio?
-          </h2>
-          <p className="mx-auto mt-4 max-w-[480px] text-[17px] font-medium opacity-80">
-            Start building a smarter investment strategy in minutes. No sign-up
-            required.
-          </p>
-          <Link
-            className="mt-10 inline-block rounded border-2 border-white bg-[var(--primary)] px-10 py-4 font-mono text-[15px] font-black uppercase text-[#1C293C] shadow-[6px_6px_0_rgba(0,0,0,0.3)] transition-transform hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none"
-            href="/dashboard"
-          >
-            Launch the App →
-          </Link>
+          <h2 className="text-[35px] font-black md:text-[42px]">{t("landing.cta.title")}</h2>
+          <p className="mx-auto mt-4 max-w-[480px] text-[17px] font-medium opacity-80">{t("landing.cta.description")}</p>
+          <Link className="mt-10 inline-block rounded border-2 border-white bg-[var(--primary)] px-10 py-4 font-mono text-[15px] font-black uppercase text-[#1C293C] shadow-[6px_6px_0_rgba(0,0,0,0.3)] transition-transform hover:-translate-y-0.5 active:translate-x-1 active:translate-y-1 active:shadow-none" href="/dashboard">{t("landing.cta.button")}</Link>
         </div>
       </section>
 
@@ -227,65 +146,30 @@ export default function LandingPage() {
         <div className="mx-auto max-w-[1200px]">
           <div className="flex flex-wrap items-start justify-between gap-8">
             <div>
-              <p className="text-[21px] font-black">17 Labs</p>
-              <p className="mt-2 max-w-[360px] text-[13px] leading-relaxed text-[var(--muted)]">
-                Portfolio Intelligence Platform. Built for investors who want
-                data-driven decisions.
-              </p>
+              <p className="text-[21px] font-black">{t("nav.brand")}</p>
+              <p className="mt-2 max-w-[360px] text-[13px] leading-relaxed text-[var(--muted)]">{t("landing.footer.description")}</p>
             </div>
             <div className="flex gap-8">
               <div>
-                <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-[var(--muted)]">
-                  Product
-                </p>
+                <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-[var(--muted)]">{t("landing.footer.product")}</p>
                 <ul className="mt-3 space-y-2 text-[13px] font-bold">
-                  <li>
-                    <Link className="hover:text-[var(--secondary)]" href="/dashboard">
-                      Dashboard
-                    </Link>
-                  </li>
-                  <li>
-                    <a className="hover:text-[var(--secondary)]" href="#features">
-                      Features
-                    </a>
-                  </li>
+                  <li><Link className="hover:text-[var(--secondary)]" href="/dashboard">{t("landing.footer.dashboard")}</Link></li>
+                  <li><a className="hover:text-[var(--secondary)]" href="#features">{t("landing.footer.features")}</a></li>
                 </ul>
               </div>
               <div>
-                <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-[var(--muted)]">
-                  Legal
-                </p>
+                <p className="font-mono text-[11px] font-bold uppercase tracking-widest text-[var(--muted)]">{t("landing.footer.legal")}</p>
                 <ul className="mt-3 space-y-2 text-[13px] font-bold">
-                  <li>
-                    <a className="hover:text-[var(--secondary)]" href="#disclaimer">
-                      Disclaimer
-                    </a>
-                  </li>
+                  <li><a className="hover:text-[var(--secondary)]" href="#disclaimer">{t("landing.footer.disclaimer")}</a></li>
                 </ul>
               </div>
             </div>
           </div>
-
-          {/* Disclaimer */}
-          <div
-            className="mt-10 rounded border-2 border-[var(--border)] bg-[var(--panel)] p-4 text-[12px] leading-relaxed text-[var(--muted)]"
-            id="disclaimer"
-          >
-            <p className="font-mono text-[11px] font-bold uppercase tracking-widest">
-              ⚠️ Financial Disclaimer
-            </p>
-            <p className="mt-2">
-              17 Labs is an educational and analytical tool. It does not
-              constitute financial advice, nor is it a recommendation to buy or
-              sell any securities. Past performance does not guarantee future
-              results. All investment decisions involve risk. Always consult a
-              licensed financial advisor before making investment decisions.
-            </p>
+          <div className="mt-10 rounded border-2 border-[var(--border)] bg-[var(--panel)] p-4 text-[12px] leading-relaxed text-[var(--muted)]" id="disclaimer">
+            <p className="font-mono text-[11px] font-bold uppercase tracking-widest">{t("landing.footer.disclaimerTitle")}</p>
+            <p className="mt-2">{t("landing.footer.disclaimerText")}</p>
           </div>
-
-          <p className="mt-6 text-center font-mono text-[11px] text-[var(--muted)]">
-            © {new Date().getFullYear()} 17 Labs. All rights reserved.
-          </p>
+          <p className="mt-6 text-center font-mono text-[11px] text-[var(--muted)]">{t("landing.footer.copyright", { year: String(new Date().getFullYear()) })}</p>
         </div>
       </footer>
     </div>

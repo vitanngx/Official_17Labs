@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslation } from "@/i18n";
+
 import { motion } from "framer-motion";
 import React from "react";
 import {
@@ -64,6 +66,7 @@ export default function PortfolioTrackerTab({
   onNotify,
   optimizedWeights
 }: PortfolioTrackerTabProps) {
+  const { t } = useTranslation();
   const [baseCurrency, setBaseCurrency] = React.useState("USD");
   const [transactions, setTransactions] = React.useState<PortfolioTransaction[]>([]);
   const [reality, setReality] = React.useState<PortfolioRealityPayload | null>(null);
@@ -203,7 +206,7 @@ export default function PortfolioTrackerTab({
     setDraft(createDraft());
     setEditingId(null);
     await refresh();
-    onNotify?.(editingId ? "Transaction updated." : "Transaction added.", "success");
+    onNotify?.(editingId ? t("reality.toast.updated") : t("reality.toast.added"), "success");
   }
 
   function startEdit(transaction: PortfolioTransaction) {
@@ -226,12 +229,12 @@ export default function PortfolioTrackerTab({
     });
 
     if (!response.ok) {
-      onNotify?.("Unable to delete transaction.", "error");
+      onNotify?.(t("reality.toast.deleteError") || "Delete failed.", "error");
       return;
     }
 
     await refresh();
-    onNotify?.("Transaction deleted.", "success");
+    onNotify?.(t("reality.toast.deleted") || "Deleted.", "success");
   }
 
   return (
@@ -239,13 +242,13 @@ export default function PortfolioTrackerTab({
       <div className="mx-auto grid max-w-[1480px] gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
         <aside className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
           <p className="font-mono text-[13px] font-bold uppercase tracking-wide text-[var(--secondary)]">
-            Tab 2 / Portfolio Tracker
+            {t("reality.tab")}
           </p>
-          <h1 className="mt-3 text-[35px] font-black leading-tight">The Reality</h1>
+          <h1 className="mt-3 text-[35px] font-black leading-tight">{t("reality.title")}</h1>
 
           <label className="mt-6 block">
             <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
-              Base Currency
+              {t("reality.baseCurrency")}
             </span>
             <select
               className="h-12 w-full rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] px-3 text-[15px] font-bold outline-none focus:shadow-[0_0_0_3px_var(--primary)]"
@@ -262,7 +265,7 @@ export default function PortfolioTrackerTab({
 
           <form className="mt-6 space-y-4" onSubmit={submitTransaction}>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Type">
+              <Field label={t("reality.type")}>
                 <select
                   className={FIELD_CLASS}
                   value={draft.type}
@@ -280,7 +283,7 @@ export default function PortfolioTrackerTab({
                   ))}
                 </select>
               </Field>
-              <Field label="Date">
+              <Field label={t("reality.date")}>
                 <input
                   className={FIELD_CLASS}
                   type="date"
@@ -290,7 +293,7 @@ export default function PortfolioTrackerTab({
                   }
                 />
               </Field>
-              <Field label="Asset">
+              <Field label={t("reality.asset")}>
                 <input
                   className={`${FIELD_CLASS} font-mono uppercase`}
                   value={draft.asset}
@@ -299,7 +302,7 @@ export default function PortfolioTrackerTab({
                   }
                 />
               </Field>
-              <Field label="Currency">
+              <Field label={t("reality.currency")}>
                 <input
                   className={`${FIELD_CLASS} font-mono uppercase`}
                   value={draft.currency}
@@ -308,7 +311,7 @@ export default function PortfolioTrackerTab({
                   }
                 />
               </Field>
-              <Field label="Amount">
+              <Field label={t("reality.amount")}>
                 <input
                   className={`${FIELD_CLASS} font-mono`}
                   min="0"
@@ -320,7 +323,7 @@ export default function PortfolioTrackerTab({
                   }
                 />
               </Field>
-              <Field label="Price">
+              <Field label={t("reality.price")}>
                 <input
                   className={`${FIELD_CLASS} font-mono`}
                   min="0"
@@ -332,7 +335,7 @@ export default function PortfolioTrackerTab({
                   }
                 />
               </Field>
-              <Field label="Fees">
+              <Field label={t("reality.fees")}>
                 <input
                   className={`${FIELD_CLASS} font-mono`}
                   min="0"
@@ -344,7 +347,7 @@ export default function PortfolioTrackerTab({
                   }
                 />
               </Field>
-              <Field label="Note">
+              <Field label={t("reality.note")}>
                 <input
                   className={FIELD_CLASS}
                   value={draft.note}
@@ -372,7 +375,7 @@ export default function PortfolioTrackerTab({
                 className="h-12 flex-1 rounded border-2 border-[var(--border)] bg-[var(--primary)] text-[#1C293C] px-4 font-mono text-[13px] font-black uppercase shadow-[5px_5px_0_var(--shadow)] active:translate-x-1 active:translate-y-1 active:shadow-none"
                 type="submit"
               >
-                {editingId ? "Update Transaction" : "Add Transaction"}
+                {editingId ? t("reality.updateTransaction") : t("reality.addTransaction")}
               </button>
             </div>
           </form>
@@ -384,61 +387,43 @@ export default function PortfolioTrackerTab({
           ) : null}
 
           <div className="mt-5 rounded border-2 border-[var(--border)] bg-[var(--primary)] text-[#1C293C] p-3">
-            <p className="font-mono text-[13px] font-bold uppercase">Holdings Value</p>
+            <p className="font-mono text-[13px] font-bold uppercase">{t("reality.holdingsValue")}</p>
             <p className="mt-1 text-[27px] font-black">
               {formatMoney(holdingsValueBase, baseCurrency)}
             </p>
           </div>
 
           <div className="mt-3 rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-3">
-            <p className="font-mono text-[13px] font-bold uppercase">Capital Invested</p>
+            <p className="font-mono text-[13px] font-bold uppercase">{t("reality.capitalInvested")}</p>
             <p className="mt-1 text-[27px] font-black">
               {formatMoney(capitalInvestedBase, baseCurrency)}
             </p>
             <p className="mt-1 text-xs font-bold text-[var(--muted)]">
-              Based on cost price x current amount. Cash ledger: {formatMoney(cashValueBase, baseCurrency)}
+              {t("reality.capitalNote", { cash: formatMoney(cashValueBase, baseCurrency) })}
             </p>
           </div>
         </aside>
 
         <div className="space-y-6">
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <RiskMetricCard
-              label="Current Volatility"
-              value={formatNullablePercent(reality?.riskMetrics.currentVolatility)}
-              detail={`${reality?.riskMetrics.observationCount ?? 0} observations`}
-            />
-            <RiskMetricCard
-              label="Max Drawdown"
-              value={formatNullablePercent(reality?.riskMetrics.maxDrawdownPct)}
-              tone="danger"
-              detail="5Y historical estimate"
-            />
-            <RiskMetricCard
-              label="Sharpe Ratio"
-              value={formatNullableNumber(reality?.riskMetrics.sharpeRatio)}
-              detail="Rf 5%, annualized"
-            />
-            <RiskMetricCard
-              label="Health Score"
-              value={healthScore === null ? "N/A" : `${healthScore}/100`}
-              tone={healthScore === null || healthScore >= 75 ? "success" : healthScore >= 50 ? "warning" : "danger"}
-              detail="Current vs 17labs target"
-            />
+            <RiskMetricCard label={t("reality.volatility")} value={formatNullablePercent(reality?.riskMetrics.currentVolatility)} detail={t("reality.observations", { count: String(reality?.riskMetrics.observationCount ?? 0) })} />
+            <RiskMetricCard label={t("reality.maxDrawdown")} value={formatNullablePercent(reality?.riskMetrics.maxDrawdownPct)} tone="danger" detail={t("reality.historicalEstimate")} />
+            <RiskMetricCard label={t("reality.sharpeRatio")} value={formatNullableNumber(reality?.riskMetrics.sharpeRatio)} detail={t("reality.rfAnnualized")} />
+            <RiskMetricCard label={t("reality.healthScore")} value={healthScore === null ? "N/A" : `${healthScore}/100`} tone={healthScore === null || healthScore >= 75 ? "success" : healthScore >= 50 ? "warning" : "danger"} detail={t("reality.vsTarget")} />
           </section>
 
           <section className="grid gap-6 xl:grid-cols-2">
-            <PiePanel title="Current Weights" data={reality?.currentWeights ?? []} />
-            <PiePanel title="17labs Optimized Weights" data={optimizedSlices} />
+            <PiePanel title={t("reality.currentWeights")} data={reality?.currentWeights ?? []} emptyLabel={t("reality.noAllocation")} />
+            <PiePanel title={t("reality.optimizedWeights")} data={optimizedSlices} emptyLabel={t("reality.noAllocation")} />
           </section>
 
           <section className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
-                  Follow-up
+                  {t("reality.followUp")}
                 </p>
-                <h2 className="mt-1 text-[27px] font-black">Rebalance Delta</h2>
+                <h2 className="mt-1 text-[27px] font-black">{t("reality.rebalanceDelta")}</h2>
               </div>
               <button
                 className="rounded border-2 border-[var(--border)] bg-[var(--panel)] px-4 py-2 font-mono text-[13px] font-black uppercase shadow-[4px_4px_0_var(--shadow)]"
@@ -446,7 +431,7 @@ export default function PortfolioTrackerTab({
                 type="button"
                 onClick={() => void refresh()}
               >
-                {loading ? "Loading" : "Refresh"}
+                {loading ? t("reality.loading") : t("reality.refresh")}
               </button>
             </div>
 
@@ -454,12 +439,12 @@ export default function PortfolioTrackerTab({
               <table className="w-full min-w-[760px] border-collapse text-left">
                 <thead>
                   <tr className="border-b-2 border-[var(--border)] font-mono text-[13px] uppercase">
-                    <th className="py-3">Asset</th>
-                    <th className="py-3">Current</th>
-                    <th className="py-3">Target</th>
-                    <th className="py-3">Delta</th>
-                    <th className="py-3">Units</th>
-                    <th className="py-3">Action</th>
+                    <th className="py-3">{t("reality.rebalanceAsset")}</th>
+                    <th className="py-3">{t("reality.rebalanceCurrent")}</th>
+                    <th className="py-3">{t("reality.rebalanceTarget")}</th>
+                    <th className="py-3">{t("reality.rebalanceDeltaCol")}</th>
+                    <th className="py-3">{t("reality.rebalanceUnits")}</th>
+                    <th className="py-3">{t("reality.rebalanceAction")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -485,7 +470,7 @@ export default function PortfolioTrackerTab({
                   ) : (
                     <tr>
                       <td className="py-8 text-center font-mono text-[15px] font-bold" colSpan={6}>
-                        Run Tab 1 and add transactions to calculate rebalance deltas.
+                        {t("reality.rebalanceEmpty")}
                       </td>
                     </tr>
                   )}
@@ -496,23 +481,21 @@ export default function PortfolioTrackerTab({
 
           <section className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
             <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
-              Transaction Ledger
+              {t("reality.ledger")}
             </p>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[980px] border-collapse text-left">
                 <thead>
                   <tr className="border-b-2 border-[var(--border)] align-top">
-                    <LedgerHeader label="Date" />
-                    <LedgerHeader label="Type" />
-                    <LedgerHeader label="Asset" />
-                    <LedgerHeader label="Amount" />
-                    <LedgerHeader label="Cost Price" />
-                    <LedgerHeader label="Actual Price" />
-                    <LedgerHeader label="% Change" />
-                    <LedgerHeader label="PnL" />
-                    <th className="py-3 text-right">
-                      <span className="block font-mono text-[13px] font-black uppercase">Actions</span>
-                    </th>
+                    <LedgerHeader label={t("reality.date")} />
+                    <LedgerHeader label={t("reality.type")} />
+                    <LedgerHeader label={t("reality.asset")} />
+                    <LedgerHeader label={t("reality.amount")} />
+                    <LedgerHeader label={t("reality.costPrice")} />
+                    <LedgerHeader label={t("reality.actualPrice")} />
+                    <LedgerHeader label={t("reality.pctChange")} />
+                    <LedgerHeader label={t("reality.pnl")} />
+                    <th className="py-3 text-right"><span className="block font-mono text-[13px] font-black uppercase">{t("reality.actions")}</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -553,7 +536,7 @@ export default function PortfolioTrackerTab({
                   {transactions.length === 0 ? (
                     <tr>
                       <td className="py-8 text-center font-mono text-[15px] font-bold" colSpan={9}>
-                        No transactions yet.
+                        {t("reality.noTransactions")}
                       </td>
                     </tr>
                   ) : null}
@@ -602,7 +585,7 @@ function RiskMetricCard({
   );
 }
 
-function PiePanel({ title, data }: { title: string; data: AllocationSlice[] }) {
+function PiePanel({ title, data, emptyLabel }: { title: string; data: AllocationSlice[]; emptyLabel: string }) {
   return (
     <motion.section
       animate={{ opacity: 1, y: 0 }}
@@ -644,7 +627,7 @@ function PiePanel({ title, data }: { title: string; data: AllocationSlice[] }) {
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center text-center font-mono text-[15px] font-bold">
-            No allocation data.
+            {emptyLabel}
           </div>
         )}
       </motion.div>

@@ -33,6 +33,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await runOptimizerBridge(payload);
+    const failure = getOptimizerFailure(result);
+
+    if (failure) {
+      return optimizerError(failure, 500);
+    }
+
     insertOptimizationRun(payload, result);
     return NextResponse.json(result);
   } catch (error) {
@@ -176,6 +182,24 @@ function parseOptimizerResponse(stdout: string) {
   }
 
   return null;
+}
+
+function getOptimizerFailure(result: unknown) {
+  if (!result || typeof result !== "object") {
+    return "Optimizer returned an invalid response.";
+  }
+
+  const payload = result as { ok?: unknown; error?: unknown };
+
+  if (payload.ok === true) {
+    return null;
+  }
+
+  if (typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error;
+  }
+
+  return "Optimizer did not complete successfully.";
 }
 
 function optimizerError(

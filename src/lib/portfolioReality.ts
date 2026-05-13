@@ -36,7 +36,7 @@ const COLORS = [
   "#A78BFA"
 ];
 const RISK_METRICS_TTL_MS = 24 * 60 * 60 * 1000;
-const RISK_METRICS_CACHE_VERSION = 3;
+const RISK_METRICS_CACHE_VERSION = 4;
 const RISK_LOOKBACK_YEARS = 5;
 
 interface PositionState {
@@ -114,13 +114,21 @@ export async function buildPortfolioReality(
   );
 
   const cash = await buildCashBalances(cashBalances, baseCurrency, warnings);
-  const totalValueBase = holdings.reduce((sum, holding) => sum + holding.marketValueBase, 0);
+  const holdingsValueBase = holdings.reduce((sum, holding) => sum + holding.marketValueBase, 0);
+  const deployableCashValueBase = cash.reduce(
+    (sum, balance) => sum + Math.max(0, balance.valueBase),
+    0
+  );
+  const totalValueBase = holdingsValueBase + deployableCashValueBase;
 
   holdings.forEach((holding) => {
     holding.weightPct = totalValueBase > 0 ? (holding.marketValueBase / totalValueBase) * 100 : 0;
   });
   cash.forEach((balance) => {
-    balance.weightPct = totalValueBase > 0 ? (balance.valueBase / totalValueBase) * 100 : 0;
+    balance.weightPct =
+      totalValueBase > 0 && balance.valueBase > 0
+        ? (balance.valueBase / totalValueBase) * 100
+        : 0;
   });
   const riskMetrics = await buildRiskMetrics(transactions, holdings, baseCurrency, warnings);
 
@@ -130,7 +138,7 @@ export async function buildPortfolioReality(
     totalValueBase,
     holdings: holdings.sort((left, right) => right.marketValueBase - left.marketValueBase),
     cashBalances: cash,
-    currentWeights: buildCurrentWeights(holdings),
+    currentWeights: buildCurrentWeights(holdings, cash),
     riskMetrics,
     warnings
   };
@@ -397,13 +405,21 @@ function riskMetricsCacheKey(
   return `risk:v${RISK_METRICS_CACHE_VERSION}:${baseCurrency}:${hash}`;
 }
 
-function buildCurrentWeights(holdings: HoldingReality[]) {
-  return holdings
-    .map((holding) => ({
+function buildCurrentWeights(holdings: HoldingReality[], cash: CashBalanceReality[]) {
+  return [
+    ...holdings.map((holding) => ({
       name: holding.asset,
       value: holding.marketValueBase,
       weightPct: holding.weightPct
-    }))
+    })),
+    ...cash
+      .filter((balance) => balance.valueBase > 0)
+      .map((balance) => ({
+        name: `${balance.currency} Cash`,
+        value: balance.valueBase,
+        weightPct: balance.weightPct
+      }))
+  ]
     .filter((slice) => Math.abs(slice.value) > 0.000001)
     .sort((left, right) => right.value - left.value)
     .map((slice, index) => ({
@@ -414,6 +430,13 @@ function buildCurrentWeights(holdings: HoldingReality[]) {
 
 function adjustCash(balances: Map<string, number>, currency: string, delta: number) {
   balances.set(currency, (balances.get(currency) ?? 0) + delta);
+}
+
+function fundNegativeCashBalance(balances: Map<string, number>, currency: string) {
+  const balance = balances.get(currency) ?? 0;
+  if (balance < 0) {
+    balances.set(currency, 0);
+  }
 }
 
 function isCashTransfer(transaction: PortfolioTransaction) {
@@ -465,6 +488,7 @@ function applyTransactionToRiskState(
   if (transaction.type === "BUY") {
     positions.set(transaction.asset, (positions.get(transaction.asset) ?? 0) + transaction.amount);
     adjustCash(cashBalances, transaction.currency, -(gross + fees));
+    fundNegativeCashBalance(cashBalances, transaction.currency);
     return;
   }
 

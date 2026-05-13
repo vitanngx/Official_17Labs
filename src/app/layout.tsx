@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import I18nWrapper from "@/components/I18nWrapper";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://17labs.app";
 
@@ -67,7 +68,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <I18nWrapper>{children}</I18nWrapper>
+      </body>
     </html>
   );
 }
+

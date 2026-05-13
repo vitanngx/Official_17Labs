@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslation } from "@/i18n";
+
 import { motion } from "framer-motion";
 import React from "react";
 import {
@@ -84,9 +86,9 @@ interface RealityResponse {
 }
 
 const RISK_PROFILES: RiskProfile[] = ["Conservative", "Balanced", "Aggressive"];
-const OPTIMIZATION_GOALS: Array<{ label: string; value: OptimizationGoal }> = [
-  { label: "Best Risk-Adjusted Return", value: "max_sharpe" },
-  { label: "Target Return", value: "target_return" }
+const OPTIMIZATION_GOAL_KEYS: Array<{ labelKey: string; value: OptimizationGoal }> = [
+  { labelKey: "strategy.maxSharpe", value: "max_sharpe" },
+  { labelKey: "strategy.targetReturn", value: "target_return" }
 ];
 const STRATEGY_RESULT_VERSION = 3;
 const STRATEGY_STORAGE_KEY = "official.strategyTab.v3";
@@ -99,6 +101,12 @@ const DEFAULT_ASSETS: AssetUniverseItem[] = [
 ];
 
 export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: StrategyTabProps) {
+  const { t } = useTranslation();
+  const riskProfileLabels: Record<RiskProfile, string> = {
+    Conservative: t("strategy.conservative"),
+    Balanced: t("strategy.balanced"),
+    Aggressive: t("strategy.aggressive"),
+  };
   const [startDate, setStartDate] = React.useState(DEFAULT_START_DATE);
   const [riskProfile, setRiskProfile] = React.useState<RiskProfile>("Balanced");
   const [optimizationGoal, setOptimizationGoal] =
@@ -114,12 +122,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
   const [syncingHoldings, setSyncingHoldings] = React.useState(false);
   const [hydrated, setHydrated] = React.useState(false);
 
-  const selectedPortfolio =
-    result?.selectedPortfolio ??
-    (optimizationGoal === "target_return"
-      ? result?.targetPortfolio ?? result?.bestPortfolio
-      : result?.bestPortfolio) ??
-    null;
+  const selectedPortfolio = selectPortfolioForGoal(result, optimizationGoal);
   const weightRows = React.useMemo(() => {
     if (!selectedPortfolio) {
       return [];
@@ -146,16 +149,20 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       setNumPortfolios(saved.numPortfolios);
       setAssetUniverse(saved.assetUniverse);
       setResult(saved.result);
-      onOptimizedWeightsChange?.(
-        (saved.result?.selectedPortfolio ?? saved.result?.targetPortfolio ?? saved.result?.bestPortfolio)
-          ?.weights ?? {}
-      );
     }
     setHydrated(true);
     if (!saved) {
       void loadLatestOptimizationRun();
     }
   }, [onOptimizedWeightsChange]);
+
+  React.useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    onOptimizedWeightsChange?.(selectedPortfolio?.weights ?? {});
+  }, [hydrated, onOptimizedWeightsChange, selectedPortfolio]);
 
   React.useEffect(() => {
     if (!hydrated) {
@@ -216,9 +223,9 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       }
 
       setResult(payload);
-      onNotify?.("Optimization complete. Target weights are ready.", "success");
+      onNotify?.(t("strategy.toast.success") || "Optimization complete.", "success");
       onOptimizedWeightsChange?.(
-        (payload.selectedPortfolio ?? payload.targetPortfolio ?? payload.bestPortfolio)?.weights ?? {}
+        selectPortfolioForGoal(payload, optimizationGoal)?.weights ?? {}
       );
     } catch (runError) {
       setResult(null);
@@ -269,7 +276,10 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       }
       setResult(run.result);
       onOptimizedWeightsChange?.(
-        (run.result.selectedPortfolio ?? run.result.targetPortfolio ?? run.result.bestPortfolio)?.weights ?? {}
+        selectPortfolioForGoal(
+          run.result,
+          run.config?.optimizationGoal === "target_return" ? "target_return" : "max_sharpe"
+        )?.weights ?? {}
       );
     } catch {
       // Latest runs are a convenience; local defaults still work without them.
@@ -303,7 +313,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       );
       setResult(null);
       onOptimizedWeightsChange?.({});
-      onNotify?.("Current holdings synced into the Strategy asset universe.", "success");
+      onNotify?.(t("strategy.toast.holdingsLoaded") || "Holdings synced.", "success");
     } catch (syncError) {
       const message =
         syncError instanceof Error ? syncError.message : "Unable to sync holdings.";
@@ -340,16 +350,16 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       <div className="mx-auto grid max-w-[1480px] gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
         <aside className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
           <p className="font-mono text-[13px] font-bold uppercase tracking-wide text-[var(--secondary)]">
-            Tab 1 / 17 Labs Management
+            {t("strategy.tab")}
           </p>
           <h1 className="mt-3 font-sans text-[35px] font-black leading-tight">
-            Strategy Optimizer
+            {t("strategy.title")}
           </h1>
 
           <form className="mt-6 space-y-5" onSubmit={runOptimization}>
             <label className="block">
               <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
-                Start Date
+                {t("strategy.startDate")}
               </span>
               <input
                 className="h-12 w-full rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] px-3 font-mono text-[15px] font-bold outline-none focus:shadow-[0_0_0_3px_var(--primary)]"
@@ -361,7 +371,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
 
             <label className="block">
               <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
-                Risk Profile
+                {t("strategy.riskProfile")}
               </span>
               <select
                 className="h-12 w-full rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] px-3 text-[15px] font-bold outline-none focus:shadow-[0_0_0_3px_var(--primary)]"
@@ -370,7 +380,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
               >
                 {RISK_PROFILES.map((profile) => (
                   <option key={profile} value={profile}>
-                    {profile}
+                    {riskProfileLabels[profile]}
                   </option>
                 ))}
               </select>
@@ -378,10 +388,10 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
 
             <div>
               <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
-                Optimization Goal
+                {t("strategy.optimizationGoal")}
               </span>
               <div className="grid gap-2 sm:grid-cols-2">
-                {OPTIMIZATION_GOALS.map((goal) => (
+                {OPTIMIZATION_GOAL_KEYS.map((goal) => (
                   <button
                     key={goal.value}
                     className={`min-h-12 rounded border-2 border-[var(--border)] px-3 py-2 font-mono text-[13px] font-black uppercase shadow-[4px_4px_0_var(--shadow)] active:translate-x-1 active:translate-y-1 active:shadow-none ${
@@ -392,14 +402,14 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
                     type="button"
                     onClick={() => setOptimizationGoal(goal.value)}
                   >
-                    {goal.label}
+                    {t(goal.labelKey)}
                   </button>
                 ))}
               </div>
             </div>
 
             <PercentControl
-              label="Risk-free Rate"
+              label={t("strategy.riskFreeRate")}
               maxPercent={50}
               minPercent={0}
               stepPercent={0.5}
@@ -408,7 +418,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
             />
 
             <PercentControl
-              label="Target Return"
+              label={t("strategy.targetReturn")}
               disabled={optimizationGoal !== "target_return"}
               maxPercent={500}
               minPercent={-100}
@@ -418,7 +428,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
             />
 
             <PercentControl
-              label="Target Tolerance"
+              label={t("strategy.targetTolerance")}
               disabled={optimizationGoal !== "target_return"}
               maxPercent={100}
               minPercent={0}
@@ -429,7 +439,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
 
             <label className="block">
               <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
-                Simulations
+                {t("strategy.simulations")}
               </span>
               <div className="rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-3">
                 <div className="flex items-center justify-between gap-3">
@@ -451,7 +461,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
 
             <div>
               <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
-                Asset Universe
+                {t("strategy.assetUniverse")}
               </span>
               <AssetDraftInput onAdd={addAsset} />
               <div className="mt-3 flex flex-wrap gap-2">
@@ -472,7 +482,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
                 type="button"
                 onClick={() => void useCurrentHoldings()}
               >
-                {syncingHoldings ? "Syncing..." : "Use Current Holdings"}
+                {syncingHoldings ? t("strategy.syncing") : t("strategy.useHoldings")}
               </button>
             </div>
 
@@ -481,7 +491,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
               disabled={loading || assetUniverse.length < 2}
               type="submit"
             >
-              {loading ? "Analyzing your strategy..." : "Find my optimal mix"}
+              {loading ? t("strategy.running") : t("strategy.runOptimizer")}
             </button>
           </form>
 
@@ -497,9 +507,9 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
-                  Efficient Frontier
+                  {t("strategy.frontier.title")}
                 </p>
-                <h2 className="mt-1 text-[27px] font-black">Risk / Return Map</h2>
+                <h2 className="mt-1 text-[27px] font-black">{t("strategy.frontier.subtitle")}</h2>
               </div>
               {selectedPortfolio ? (
                 <div className="flex flex-wrap gap-2">
@@ -565,7 +575,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
                 </ResponsiveContainer>
               ) : (
                 <div className="flex h-full items-center justify-center text-center font-mono text-[15px] font-bold">
-                  Configure the strategy and run the optimizer.
+                  {t("strategy.weights.emptyHint")}
                 </div>
               )}
             </motion.div>
@@ -573,17 +583,17 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
 
           <section className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
             <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
-              Target Weights
+              {t("strategy.weights.title")}
             </p>
-            <h2 className="mt-1 text-[27px] font-black">17 Labs Proposal</h2>
+            <h2 className="mt-1 text-[27px] font-black">{t("strategy.weights.subtitle")}</h2>
 
             <div className="mt-5 overflow-x-auto">
               <table className="w-full min-w-[520px] border-collapse text-left">
                 <thead>
                   <tr className="border-b-2 border-[var(--border)] font-mono text-[13px] uppercase">
-                    <th className="py-3">Asset</th>
-                    <th className="py-3">Weight</th>
-                    <th className="py-3">Action</th>
+                    <th className="py-3">{t("strategy.weights.asset")}</th>
+                    <th className="py-3">{t("strategy.weights.weight")}</th>
+                    <th className="py-3">{t("strategy.weights.action")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -607,7 +617,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
                   ) : (
                     <tr>
                       <td className="py-8 text-center font-mono text-[15px] font-bold" colSpan={3}>
-                        No target weights yet.
+                        {t("strategy.weights.empty")}
                       </td>
                     </tr>
                   )}
@@ -821,6 +831,21 @@ function persistStrategyState(state: PersistedStrategyState) {
   } catch {
     // Browser storage can fail in private mode or quota pressure. The app still works without persistence.
   }
+}
+
+function selectPortfolioForGoal(
+  result: OptimizationResponse | null | undefined,
+  goal: OptimizationGoal
+) {
+  if (!result?.ok) {
+    return null;
+  }
+
+  if (goal === "target_return") {
+    return result.targetPortfolio ?? result.bestPortfolio ?? null;
+  }
+
+  return result.bestPortfolio ?? null;
 }
 
 function countDecimals(value: number) {

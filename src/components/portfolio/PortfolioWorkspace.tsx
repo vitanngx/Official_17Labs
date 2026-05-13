@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import React from "react";
 import PortfolioTrackerTab from "@/components/portfolio/PortfolioTrackerTab";
 import StrategyTab from "@/components/portfolio/StrategyTab";
+import { useTranslation, LOCALES, LOCALE_LABELS } from "@/i18n";
 
 type ActiveTab = "strategy" | "reality";
 type ThemeMode = "light" | "dark";
@@ -18,6 +19,7 @@ interface ToastMessage {
 const WORKSPACE_STORAGE_KEY = "official.workspace.v1";
 
 export default function PortfolioWorkspace() {
+  const { t, locale, setLocale } = useTranslation();
   const [activeTab, setActiveTab] = React.useState<ActiveTab>("strategy");
   const [optimizedWeights, setOptimizedWeights] = React.useState<Record<string, number>>({});
   const [theme, setTheme] = React.useState<ThemeMode>("light");
@@ -78,28 +80,37 @@ export default function PortfolioWorkspace() {
     <main className="min-h-screen bg-[var(--surface)] text-[var(--text)]" data-theme={theme}>
       <nav className="sticky top-0 z-10 border-b-2 border-[var(--border)] bg-[var(--surface)] px-4 py-3 md:px-8">
         <div className="mx-auto flex max-w-[1480px] flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
-              Official / Portfolio Intelligence
-            </p>
-            <h1 className="text-[27px] font-black">17 Labs + Reality Tracker</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex rounded border-2 border-[var(--border)] bg-[var(--panel)] p-1 shadow-[4px_4px_0_var(--shadow)]">
-              <ModeButton active={theme === "light"} onClick={() => setTheme("light")}>
-                Light
-              </ModeButton>
-              <ModeButton active={theme === "dark"} onClick={() => setTheme("dark")}>
-                Dark
-              </ModeButton>
-            </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <a className="group" href="/">
+              <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
+                {t("nav.subtitle")}
+              </p>
+              <h1 className="text-[27px] font-black group-hover:text-[var(--secondary)] transition-colors">
+                {t("nav.brand")}
+              </h1>
+            </a>
             <div className="flex rounded border-2 border-[var(--border)] bg-[var(--panel)] p-1 shadow-[4px_4px_0_var(--shadow)]">
               <TabButton active={activeTab === "strategy"} onClick={() => setActiveTab("strategy")}>
-                Strategy
+                {t("nav.strategy")}
               </TabButton>
               <TabButton active={activeTab === "reality"} onClick={() => setActiveTab("reality")}>
-                Reality
+                {t("nav.reality")}
               </TabButton>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex rounded border-2 border-[var(--border)] bg-[var(--panel)] p-0.5 shadow-[3px_3px_0_var(--shadow)]">
+              {LOCALES.map((loc) => (
+                <button key={loc} type="button" onClick={() => setLocale(loc)} className={`rounded px-2 py-1.5 font-mono text-[11px] font-black transition-colors ${loc === locale ? "bg-[var(--primary)] text-[#1C293C]" : "hover:bg-[var(--panel-soft)]"}`}>{LOCALE_LABELS[loc]}</button>
+              ))}
+            </div>
+            <div className="flex rounded border-2 border-[var(--border)] bg-[var(--panel)] p-1 shadow-[4px_4px_0_var(--shadow)]">
+              <ModeButton active={theme === "light"} onClick={() => setTheme("light")}>
+                {t("nav.light")}
+              </ModeButton>
+              <ModeButton active={theme === "dark"} onClick={() => setTheme("dark")}>
+                {t("nav.dark")}
+              </ModeButton>
             </div>
           </div>
         </div>

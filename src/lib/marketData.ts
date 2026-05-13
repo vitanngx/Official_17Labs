@@ -15,6 +15,7 @@ export interface MarketHistoryPoint {
 const QUOTE_TTL_MS = 30 * 60 * 1000;
 const FX_TTL_MS = 12 * 60 * 60 * 1000;
 const HISTORY_TTL_MS = 24 * 60 * 60 * 1000;
+const YFINANCE_TIMEOUT_MS = 20_000;
 
 export async function fetchLatestPrice(asset: string): Promise<MarketQuote> {
   if (isCashSymbol(asset)) {
@@ -237,6 +238,17 @@ function runYfinanceBridge(
     });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      child.kill("SIGTERM");
+      reject(new Error(`yfinance timed out for ${symbol}.`));
+    }, YFINANCE_TIMEOUT_MS);
 
     child.stdout.on("data", (chunk) => {
       stdout += chunk.toString();
@@ -244,8 +256,23 @@ function runYfinanceBridge(
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
     });
-    child.on("error", reject);
+    child.on("error", (error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    });
     child.on("close", () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+
       try {
         const parsed = JSON.parse(stdout.trim()) as YfinanceBridgeResponse;
         resolve(parsed);
