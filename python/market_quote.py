@@ -50,16 +50,16 @@ def main() -> None:
     points = []
     closes = []
     for index, row in history.iterrows():
-      close = safe_float(row.get("Close"))
-      if close is None:
-          continue
-      closes.append(close)
-      points.append(
-          {
-              "date": format_timestamp(index),
-              "close": close,
-          }
-      )
+        close = safe_float(row.get("Close"))
+        if close is None:
+            continue
+        closes.append(close)
+        points.append(
+            {
+                "date": format_timestamp(index),
+                "close": close,
+            }
+        )
 
     if not points:
         raise ValueError(f"No history returned for {symbol}")

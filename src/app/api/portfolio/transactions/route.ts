@@ -6,6 +6,7 @@ import {
   updateTransaction
 } from "@/lib/realityDb";
 import { TransactionInput } from "@/types/reality";
+import { isAuthenticated } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,6 +19,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+  }
+
   try {
     const input = (await request.json()) as TransactionInput;
     const transaction = insertTransaction(input);
@@ -38,6 +43,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+  }
+
   const id = request.nextUrl.searchParams.get("id");
   if (!id) {
     return NextResponse.json({ ok: false, error: "Missing transaction id." }, { status: 400 });
@@ -63,6 +72,10 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+  }
+
   const id = request.nextUrl.searchParams.get("id");
 
   if (!id) {

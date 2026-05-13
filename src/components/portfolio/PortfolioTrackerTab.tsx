@@ -229,12 +229,12 @@ export default function PortfolioTrackerTab({
     });
 
     if (!response.ok) {
-      onNotify?.(t("reality.toast.deleteError") || "Delete failed.", "error");
+      onNotify?.(t("reality.toast.deleteError"), "error");
       return;
     }
 
     await refresh();
-    onNotify?.(t("reality.toast.deleted") || "Deleted.", "success");
+    onNotify?.(t("reality.toast.deleted"), "success");
   }
 
   return (

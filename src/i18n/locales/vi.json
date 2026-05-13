@@ -85,6 +85,16 @@
   "strategy.weights.action": "Hành Động",
   "strategy.weights.empty": "Chưa có tỷ trọng mục tiêu.",
   "strategy.weights.emptyHint": "Cấu hình chiến lược và chạy tối ưu hóa.",
+  "strategy.stale.title": "Danh mục đã thay đổi",
+  "strategy.stale.description": "Danh mục thực tế của bạn đã được cập nhật kể từ lần cuối bạn chạy tối ưu hóa. Vui lòng chạy lại Tối Ưu Hóa Chiến Lược để có tỷ trọng mục tiêu chính xác.",
+  "auth.title": "Quyền Quản Trị",
+  "auth.description": "Nhập mật khẩu để mở khóa các tính năng bảo vệ.",
+  "auth.passwordPlaceholder": "Mật khẩu",
+  "auth.cancel": "Hủy",
+  "auth.unlock": "Mở Khóa",
+  "auth.unlocking": "Đang Mở Khóa...",
+  "auth.invalidPassword": "Mật khẩu không hợp lệ.",
+  "auth.networkError": "Lỗi mạng khi đăng nhập.",
   "reality.tab": "Tab 2 / Theo Dõi Danh Mục",
   "reality.title": "Thực Tế",
   "reality.baseCurrency": "Tiền Tệ Cơ Sở",
@@ -132,5 +142,16 @@
   "reality.edit": "Sửa",
   "reality.delete": "Xóa",
   "reality.noTransactions": "Chưa có giao dịch nào.",
-  "reality.noAllocation": "Chưa có dữ liệu phân bổ."
+  "reality.noAllocation": "Chưa có dữ liệu phân bổ.",
+
+  "strategy.toast.success": "Tối ưu hóa hoàn tất. Tỷ trọng mục tiêu đã sẵn sàng.",
+  "strategy.toast.holdingsLoaded": "Đã đồng bộ danh mục hiện tại vào danh sách tài sản.",
+
+  "reality.toast.added": "Đã thêm giao dịch.",
+  "reality.toast.updated": "Đã cập nhật giao dịch.",
+  "reality.toast.deleted": "Đã xóa giao dịch.",
+  "reality.toast.deleteError": "Không thể xóa giao dịch.",
+
+  "toast.errorTitle": "Cần hành động",
+  "toast.updateTitle": "Cập nhật"
 }

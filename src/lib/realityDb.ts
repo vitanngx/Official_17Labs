@@ -16,16 +16,45 @@ function ensureDataDirectory() {
   }
 }
 
-function withDatabase<T>(run: (database: DatabaseSync) => T): T {
-  ensureDataDirectory();
-  const database = new DatabaseSync(databasePath);
-  migrate(database);
+declare global {
+  // eslint-disable-next-line no-var
+  var __realityDb: DatabaseSync | undefined;
+}
 
-  try {
-    return run(database);
-  } finally {
-    database.close();
+let dbInstance: DatabaseSync | undefined;
+
+function getDatabase(): DatabaseSync {
+  if (process.env.NODE_ENV !== "production") {
+    if (globalThis.__realityDb) {
+      return globalThis.__realityDb;
+    }
+  } else {
+    if (dbInstance) {
+      return dbInstance;
+    }
   }
+
+  ensureDataDirectory();
+  const db = new DatabaseSync(databasePath);
+
+  // Enable Write-Ahead Logging for better concurrent read/write performance
+  db.exec("PRAGMA journal_mode = WAL;");
+
+  migrate(db);
+
+  if (process.env.NODE_ENV !== "production") {
+    globalThis.__realityDb = db;
+  } else {
+    dbInstance = db;
+  }
+
+  return db;
+}
+
+function withDatabase<T>(run: (database: DatabaseSync) => T): T {
+  const db = getDatabase();
+  // Do NOT close the database here, it is a singleton connection.
+  return run(db);
 }
 
 function migrate(database: DatabaseSync) {
@@ -263,10 +292,52 @@ export function getLatestOptimizationRun(): OptimizationRun | null {
   });
 }
 
-function normalizeTransactionInput(input: TransactionInput): TransactionInput {
-  if (!input.date || !input.asset || !input.currency) {
-    throw new Error("date, asset, and currency are required.");
+const VALID_TRANSACTION_TYPES = ["BUY", "SELL", "TRANSFER", "CASH_IN", "CASH_OUT", "DIVIDEND"] as const;
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_STRING_LENGTH = 100;
+
+function isValidDate(value: string): boolean {
+  if (!DATE_REGEX.test(value)) {
+    return false;
   }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+function requireNonEmptyString(value: unknown, fieldName: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`${fieldName} is required and must not be empty.`);
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length > MAX_STRING_LENGTH) {
+    throw new Error(`${fieldName} must be ${MAX_STRING_LENGTH} characters or fewer.`);
+  }
+
+  return trimmed;
+}
+
+function normalizeTransactionInput(input: TransactionInput): TransactionInput {
+  if (!input || typeof input !== "object") {
+    throw new Error("Invalid transaction input.");
+  }
+
+  if (!VALID_TRANSACTION_TYPES.includes(input.type as typeof VALID_TRANSACTION_TYPES[number])) {
+    throw new Error(`Invalid transaction type: ${String(input.type).slice(0, 50)}. Must be one of: ${VALID_TRANSACTION_TYPES.join(", ")}.`);
+  }
+
+  if (typeof input.date !== "string" || !isValidDate(input.date)) {
+    throw new Error("date must be a valid calendar date in YYYY-MM-DD format.");
+  }
+
+  const asset = requireNonEmptyString(input.asset, "asset");
+  const currency = requireNonEmptyString(input.currency, "currency");
 
   if (!Number.isFinite(input.amount) || input.amount <= 0) {
     throw new Error("amount must be greater than zero.");
@@ -280,15 +351,17 @@ function normalizeTransactionInput(input: TransactionInput): TransactionInput {
     throw new Error("fees must be zero or greater.");
   }
 
+  const note = typeof input.note === "string" ? input.note.trim() : null;
+
   return {
     type: input.type,
     date: input.date,
-    asset: input.asset.trim().toUpperCase(),
+    asset: asset.toUpperCase(),
     amount: input.amount,
     price: input.price,
     fees: input.fees,
-    currency: input.currency.trim().toUpperCase(),
-    note: input.note?.trim() ? input.note.trim() : null
+    currency: currency.toUpperCase(),
+    note: note && note.length > 0 ? note.slice(0, 500) : null
   };
 }
 

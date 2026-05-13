@@ -69,6 +69,7 @@ export interface PortfolioRealityPayload {
   currentWeights: AllocationSlice[];
   riskMetrics: RiskMetrics;
   warnings: string[];
+  stateHash: string;
 }
 
 export interface OptimizationRun {

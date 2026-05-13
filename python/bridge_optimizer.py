@@ -167,6 +167,7 @@ def optimize(payload: dict[str, Any]) -> dict[str, Any]:
         scipy_target = find_min_volatility_for_target_scipy(
             annual_returns=annual_returns,
             covariance=covariance,
+            risk_free_rate=risk_free_rate,
             tickers=tickers,
             target_return=target_return,
             target_tolerance=target_tolerance,
@@ -273,7 +274,7 @@ def download_price_history(assets: list[dict[str, Any]], start_date: str) -> pd.
         close_prices.columns = close_prices.columns.get_level_values(0)
 
     close_prices = close_prices.rename(
-        columns={symbol: display_symbol(symbol) for symbol in symbols}
+        columns={symbol: symbol for symbol in symbols}
     )
     price_records = close_prices.reset_index().rename(columns={"Date": "date"}).to_dict(
         orient="records"
@@ -304,8 +305,6 @@ def normalize_yahoo_symbol(asset: dict[str, Any]) -> str:
     return raw
 
 
-def display_symbol(symbol: str) -> str:
-    return symbol
 
 
 def default_start_date() -> str:
@@ -569,6 +568,7 @@ def find_max_sharpe_scipy(
 def find_min_volatility_for_target_scipy(
     annual_returns: pd.Series,
     covariance: pd.DataFrame,
+    risk_free_rate: float,
     tickers: list[str],
     target_return: float,
     target_tolerance: float,
@@ -616,7 +616,7 @@ def find_min_volatility_for_target_scipy(
         weights = result.x
         port_return = float(weights @ mean_returns)
         port_vol = float(np.sqrt(weights @ cov_matrix @ weights))
-        sharpe = (port_return - 0.0) / port_vol if port_vol > 0 else float("nan")
+        sharpe = (port_return - risk_free_rate) / port_vol if port_vol > 0 else float("nan")
 
         return clean_record(
             {

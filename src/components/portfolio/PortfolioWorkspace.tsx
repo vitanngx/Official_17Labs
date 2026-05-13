@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import React from "react";
 import PortfolioTrackerTab from "@/components/portfolio/PortfolioTrackerTab";
 import StrategyTab from "@/components/portfolio/StrategyTab";
+import AuthModal from "@/components/portfolio/AuthModal";
 import { useTranslation, LOCALES, LOCALE_LABELS } from "@/i18n";
 
 type ActiveTab = "strategy" | "reality";
@@ -25,6 +26,7 @@ export default function PortfolioWorkspace() {
   const [theme, setTheme] = React.useState<ThemeMode>("light");
   const [toasts, setToasts] = React.useState<ToastMessage[]>([]);
   const [hydrated, setHydrated] = React.useState(false);
+  const [showAuthModal, setShowAuthModal] = React.useState(false);
 
   React.useEffect(() => {
     try {
@@ -76,6 +78,15 @@ export default function PortfolioWorkspace() {
     }, tone === "error" ? 6000 : 3600);
   }, []);
 
+  function handleUnlockClick() {
+    setShowAuthModal(true);
+  }
+
+  function handleAuthSuccess() {
+    setShowAuthModal(false);
+    notify(t("toast.unlocked") || "Unlocked successfully.", "success");
+  }
+
   return (
     <main className="min-h-screen bg-[var(--surface)] text-[var(--text)]" data-theme={theme}>
       <nav className="sticky top-0 z-10 border-b-2 border-[var(--border)] bg-[var(--surface)] px-4 py-3 md:px-8">
@@ -112,6 +123,13 @@ export default function PortfolioWorkspace() {
                 {t("nav.dark")}
               </ModeButton>
             </div>
+            <button
+              onClick={handleUnlockClick}
+              title={t("nav.unlock") || "Unlock / Admin Login"}
+              className="flex items-center justify-center rounded border-2 border-[var(--border)] bg-[var(--panel)] p-2 shadow-[4px_4px_0_var(--shadow)] hover:bg-[var(--panel-soft)] transition-colors"
+            >
+              🔒
+            </button>
           </div>
         </div>
       </nav>
@@ -132,7 +150,14 @@ export default function PortfolioWorkspace() {
         </motion.div>
       </AnimatePresence>
 
-      <ToastStack toasts={toasts} />
+      <ToastStack toasts={toasts} t={t} />
+
+      {showAuthModal && (
+        <AuthModal 
+          onClose={() => setShowAuthModal(false)} 
+          onSuccess={handleAuthSuccess} 
+        />
+      )}
     </main>
   );
 }
@@ -182,7 +207,7 @@ function ModeButton({
   );
 }
 
-function ToastStack({ toasts }: { toasts: ToastMessage[] }) {
+function ToastStack({ toasts, t }: { toasts: ToastMessage[]; t: (key: string) => string }) {
   return (
     <div className="fixed right-4 top-24 z-50 flex w-[min(420px,calc(100vw-32px))] flex-col gap-3">
       <AnimatePresence>
@@ -202,7 +227,7 @@ function ToastStack({ toasts }: { toasts: ToastMessage[] }) {
             transition={{ duration: 0.18, ease: "easeOut" }}
           >
             <p className="font-mono text-[13px] font-black uppercase">
-              {toast.tone === "error" ? "Action needed" : "Update"}
+              {toast.tone === "error" ? t("toast.errorTitle") : t("toast.updateTitle")}
             </p>
             <p className="mt-1 text-[14px]">{toast.message}</p>
           </motion.div>

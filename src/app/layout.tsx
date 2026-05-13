@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import "./globals.css";
 import I18nWrapper from "@/components/I18nWrapper";
+import { Locale, LOCALES } from "@/i18n";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://17labs.app";
 
@@ -66,10 +68,14 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const cookieStore = cookies();
+  const savedLocale = cookieStore.get("official.locale")?.value as Locale | undefined;
+  const initialLocale = savedLocale && LOCALES.includes(savedLocale) ? savedLocale : "en";
+
   return (
-    <html lang="en">
+    <html lang={initialLocale}>
       <body>
-        <I18nWrapper>{children}</I18nWrapper>
+        <I18nWrapper initialLocale={initialLocale}>{children}</I18nWrapper>
       </body>
     </html>
   );

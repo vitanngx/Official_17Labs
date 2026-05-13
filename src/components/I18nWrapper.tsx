@@ -2,6 +2,8 @@
 
 import { I18nProvider } from "@/i18n";
 
-export default function I18nWrapper({ children }: { children: React.ReactNode }) {
-  return <I18nProvider>{children}</I18nProvider>;
+import { Locale } from "@/i18n";
+
+export default function I18nWrapper({ children, initialLocale }: { children: React.ReactNode, initialLocale?: Locale }) {
+  return <I18nProvider initialLocale={initialLocale}>{children}</I18nProvider>;
 }

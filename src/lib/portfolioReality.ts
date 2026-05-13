@@ -38,6 +38,8 @@ const COLORS = [
 const RISK_METRICS_TTL_MS = 24 * 60 * 60 * 1000;
 const RISK_METRICS_CACHE_VERSION = 4;
 const RISK_LOOKBACK_YEARS = 5;
+const DEFAULT_RISK_FREE_RATE = 0.05;
+const TRADING_DAYS_PER_YEAR = 252;
 
 interface PositionState {
   asset: string;
@@ -131,6 +133,7 @@ export async function buildPortfolioReality(
         : 0;
   });
   const riskMetrics = await buildRiskMetrics(transactions, holdings, baseCurrency, warnings);
+  const stateHash = computeStateHash(transactions, baseCurrency);
 
   return {
     ok: true,
@@ -140,8 +143,19 @@ export async function buildPortfolioReality(
     cashBalances: cash,
     currentWeights: buildCurrentWeights(holdings, cash),
     riskMetrics,
-    warnings
+    warnings,
+    stateHash
   };
+}
+
+function computeStateHash(transactions: PortfolioTransaction[], baseCurrency: string): string {
+  const latestUpdate = transactions.reduce(
+    (max, t) => (t.updatedAt && t.updatedAt > max ? t.updatedAt : max),
+    ""
+  );
+
+  const raw = `${baseCurrency}|${transactions.length}|${latestUpdate}`;
+  return createHash("sha256").update(raw).digest("hex");
 }
 
 async function buildHolding(
@@ -324,10 +338,10 @@ function calculateRiskMetrics(navSeries: Array<{ date: string; value: number }>)
 
   const mean = average(returns);
   const dailyStdDev = standardDeviation(returns);
-  const annualizedReturn = mean * 252;
-  const annualizedVolatility = dailyStdDev * Math.sqrt(252);
+  const annualizedReturn = mean * TRADING_DAYS_PER_YEAR;
+  const annualizedVolatility = dailyStdDev * Math.sqrt(TRADING_DAYS_PER_YEAR);
   const sharpeRatio =
-    annualizedVolatility > 0 ? (annualizedReturn - 0.05) / annualizedVolatility : null;
+    annualizedVolatility > 0 ? (annualizedReturn - DEFAULT_RISK_FREE_RATE) / annualizedVolatility : null;
 
   return {
     currentVolatility: annualizedVolatility * 100,
@@ -432,6 +446,12 @@ function adjustCash(balances: Map<string, number>, currency: string, delta: numb
   balances.set(currency, (balances.get(currency) ?? 0) + delta);
 }
 
+/**
+ * Implicit funding: when a BUY reduces cash below zero, reset to zero.
+ * This allows users to log BUY transactions without explicitly entering
+ * a preceding CASH_IN — the app treats the purchase cost as implicitly
+ * funded capital. The UI should communicate this behavior clearly.
+ */
 function fundNegativeCashBalance(balances: Map<string, number>, currency: string) {
   const balance = balances.get(currency) ?? 0;
   if (balance < 0) {

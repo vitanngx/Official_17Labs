@@ -63,6 +63,7 @@ interface PersistedStrategyState {
   numPortfolios: number;
   assetUniverse: AssetUniverseItem[];
   result: OptimizationResponse | null;
+  optimizedAtPortfolioHash?: string;
 }
 
 interface LatestOptimizationRunResponse {
@@ -82,6 +83,7 @@ interface RealityResponse {
     asset: string;
     currency: string;
   }>;
+  stateHash?: string;
   error?: string;
 }
 
@@ -121,6 +123,8 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
   const [loading, setLoading] = React.useState(false);
   const [syncingHoldings, setSyncingHoldings] = React.useState(false);
   const [hydrated, setHydrated] = React.useState(false);
+  const [currentPortfolioHash, setCurrentPortfolioHash] = React.useState<string | null>(null);
+  const [optimizedAtPortfolioHash, setOptimizedAtPortfolioHash] = React.useState<string | null>(null);
 
   const selectedPortfolio = selectPortfolioForGoal(result, optimizationGoal);
   const weightRows = React.useMemo(() => {
@@ -149,11 +153,24 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       setNumPortfolios(saved.numPortfolios);
       setAssetUniverse(saved.assetUniverse);
       setResult(saved.result);
+      if (saved.optimizedAtPortfolioHash) {
+        setOptimizedAtPortfolioHash(saved.optimizedAtPortfolioHash);
+      }
     }
     setHydrated(true);
     if (!saved) {
       void loadLatestOptimizationRun();
     }
+    
+    // Check current reality hash quietly to detect stale weights
+    fetch("/api/portfolio/reality?baseCurrency=USD", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((payload: RealityResponse) => {
+        if (payload.ok && payload.stateHash) {
+          setCurrentPortfolioHash(payload.stateHash);
+        }
+      })
+      .catch(() => {});
   }, [onOptimizedWeightsChange]);
 
   React.useEffect(() => {
@@ -178,7 +195,8 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       targetTolerance,
       numPortfolios,
       assetUniverse,
-      result
+      result,
+      optimizedAtPortfolioHash: optimizedAtPortfolioHash || undefined
     });
   }, [
     assetUniverse,
@@ -190,7 +208,8 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
     riskProfile,
     startDate,
     targetReturn,
-    targetTolerance
+    targetTolerance,
+    optimizedAtPortfolioHash
   ]);
 
   async function runOptimization(event: React.FormEvent<HTMLFormElement>) {
@@ -223,7 +242,8 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       }
 
       setResult(payload);
-      onNotify?.(t("strategy.toast.success") || "Optimization complete.", "success");
+      setOptimizedAtPortfolioHash(currentPortfolioHash);
+      onNotify?.(t("strategy.toast.success"), "success");
       onOptimizedWeightsChange?.(
         selectPortfolioForGoal(payload, optimizationGoal)?.weights ?? {}
       );
@@ -274,6 +294,9 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       if (Array.isArray(run.config?.assetUniverse) && run.config.assetUniverse.length > 0) {
         setAssetUniverse(run.config.assetUniverse);
       }
+      if (run.config?.optimizedAtPortfolioHash) {
+        setOptimizedAtPortfolioHash(run.config.optimizedAtPortfolioHash);
+      }
       setResult(run.result);
       onOptimizedWeightsChange?.(
         selectPortfolioForGoal(
@@ -299,6 +322,10 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
         throw new Error(payload.error ?? "Unable to load current holdings.");
       }
 
+      if (payload.stateHash) {
+        setCurrentPortfolioHash(payload.stateHash);
+      }
+
       const holdings = payload.holdings ?? [];
       if (holdings.length < 2) {
         throw new Error("Add at least two holdings in Tab 2 before syncing.");
@@ -313,7 +340,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       );
       setResult(null);
       onOptimizedWeightsChange?.({});
-      onNotify?.(t("strategy.toast.holdingsLoaded") || "Holdings synced.", "success");
+      onNotify?.(t("strategy.toast.holdingsLoaded"), "success");
     } catch (syncError) {
       const message =
         syncError instanceof Error ? syncError.message : "Unable to sync holdings.";
@@ -344,6 +371,13 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
   function removeAsset(asset: string) {
     setAssetUniverse((current) => current.filter((item) => item.asset !== asset));
   }
+
+  const isStale =
+    hydrated &&
+    result &&
+    currentPortfolioHash &&
+    optimizedAtPortfolioHash &&
+    optimizedAtPortfolioHash !== currentPortfolioHash;
 
   return (
     <section className="min-h-screen bg-[var(--panel-soft)] px-4 py-6 text-[var(--text)] md:px-8">
@@ -503,6 +537,20 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
         </aside>
 
         <div className="space-y-6">
+          {isStale && (
+            <div className="rounded border-2 border-orange-500 bg-orange-50 p-4 text-orange-900 shadow-[4px_4px_0_#f97316]">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">⚠️</span>
+                <div>
+                  <h3 className="font-bold">{t("strategy.stale.title") || "Portfolio has changed"}</h3>
+                  <p className="text-sm">
+                    {t("strategy.stale.description") || "Your Reality portfolio has been updated since the last time you ran the optimizer. Please re-run the Strategy Optimizer to get accurate target weights."}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <section className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>

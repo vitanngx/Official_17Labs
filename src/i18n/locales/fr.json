@@ -85,6 +85,16 @@
   "strategy.weights.action": "Action",
   "strategy.weights.empty": "Pas encore de poids cibles.",
   "strategy.weights.emptyHint": "Configurez la stratégie et lancez l'optimiseur.",
+  "strategy.stale.title": "Le portefeuille a changé",
+  "strategy.stale.description": "Votre portefeuille Réalité a été mis à jour depuis la dernière exécution de l'optimiseur. Veuillez relancer l'Optimiseur de Stratégie pour obtenir des poids cibles précis.",
+  "auth.title": "Accès Administrateur",
+  "auth.description": "Entrez votre mot de passe pour déverrouiller les fonctionnalités protégées.",
+  "auth.passwordPlaceholder": "Mot de passe",
+  "auth.cancel": "Annuler",
+  "auth.unlock": "Déverrouiller",
+  "auth.unlocking": "Déverrouillage...",
+  "auth.invalidPassword": "Mot de passe invalide.",
+  "auth.networkError": "Erreur réseau lors de la connexion.",
   "reality.tab": "Onglet 2 / Suivi de Portefeuille",
   "reality.title": "La Réalité",
   "reality.baseCurrency": "Devise de Base",
@@ -132,5 +142,16 @@
   "reality.edit": "Modifier",
   "reality.delete": "Supprimer",
   "reality.noTransactions": "Aucune transaction pour le moment.",
-  "reality.noAllocation": "Aucune donnée d'allocation."
+  "reality.noAllocation": "Aucune donnée d'allocation.",
+
+  "strategy.toast.success": "Optimisation terminée. Les poids cibles sont prêts.",
+  "strategy.toast.holdingsLoaded": "Positions actuelles synchronisées dans l'univers d'actifs.",
+
+  "reality.toast.added": "Transaction ajoutée.",
+  "reality.toast.updated": "Transaction mise à jour.",
+  "reality.toast.deleted": "Transaction supprimée.",
+  "reality.toast.deleteError": "Impossible de supprimer la transaction.",
+
+  "toast.errorTitle": "Action requise",
+  "toast.updateTitle": "Mise à jour"
 }

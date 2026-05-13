@@ -28,24 +28,13 @@ const I18nContext = React.createContext<I18nContextValue | null>(null);
 
 const LOCALE_STORAGE_KEY = "official.locale";
 
-export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = React.useState<Locale>(DEFAULT_LOCALE);
-
-  React.useEffect(() => {
-    try {
-      const saved = localStorage.getItem(LOCALE_STORAGE_KEY) as Locale | null;
-      if (saved && LOCALES.includes(saved)) {
-        setLocaleState(saved);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
+export function I18nProvider({ children, initialLocale }: { children: React.ReactNode, initialLocale?: Locale }) {
+  const [locale, setLocaleState] = React.useState<Locale>(initialLocale ?? DEFAULT_LOCALE);
 
   const setLocale = React.useCallback((next: Locale) => {
     setLocaleState(next);
     try {
-      localStorage.setItem(LOCALE_STORAGE_KEY, next);
+      document.cookie = `${LOCALE_STORAGE_KEY}=${next}; path=/; max-age=31536000; samesite=lax`;
     } catch {
       // ignore
     }

@@ -87,6 +87,16 @@
   "strategy.weights.action": "Action",
   "strategy.weights.empty": "No target weights yet.",
   "strategy.weights.emptyHint": "Configure the strategy and run the optimizer.",
+  "strategy.stale.title": "Portfolio has changed",
+  "strategy.stale.description": "Your Reality portfolio has been updated since the last time you ran the optimizer. Please re-run the Strategy Optimizer to get accurate target weights.",
+  "auth.title": "Administrator Access",
+  "auth.description": "Enter your password to unlock protected features.",
+  "auth.passwordPlaceholder": "Password",
+  "auth.cancel": "Cancel",
+  "auth.unlock": "Unlock",
+  "auth.unlocking": "Unlocking...",
+  "auth.invalidPassword": "Invalid password.",
+  "auth.networkError": "Network error during login.",
 
   "reality.tab": "Tab 2 / Portfolio Tracker",
   "reality.title": "The Reality",
@@ -135,5 +145,16 @@
   "reality.edit": "Edit",
   "reality.delete": "Delete",
   "reality.noTransactions": "No transactions yet.",
-  "reality.noAllocation": "No allocation data."
+  "reality.noAllocation": "No allocation data.",
+
+  "strategy.toast.success": "Optimization complete. Target weights are ready.",
+  "strategy.toast.holdingsLoaded": "Current holdings synced into the Strategy asset universe.",
+
+  "reality.toast.added": "Transaction added.",
+  "reality.toast.updated": "Transaction updated.",
+  "reality.toast.deleted": "Transaction deleted.",
+  "reality.toast.deleteError": "Unable to delete transaction.",
+
+  "toast.errorTitle": "Action needed",
+  "toast.updateTitle": "Update"
 }

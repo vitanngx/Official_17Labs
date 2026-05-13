@@ -42,10 +42,12 @@ def optimize_portfolio(request: OptimizeRequest) -> dict[str, Any]:
         result["optimizerRuntimeMs"] = round((time.perf_counter() - started_at) * 1000, 2)
         return result
     except Exception as exc:
+        # Log full traceback server-side only.
+        print(traceback.format_exc(limit=6), file=__import__("sys").stderr)
         return {
             "ok": False,
             "error": "Python optimizer failed.",
-            "details": [str(exc), traceback.format_exc(limit=4)],
+            "details": [str(exc)],
             "engine": "fastapi",
             "optimizerRuntimeMs": round((time.perf_counter() - started_at) * 1000, 2),
         }
