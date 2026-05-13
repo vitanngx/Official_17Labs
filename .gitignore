@@ -9,3 +9,4 @@ tsconfig.tsbuildinfo
 .env
 .env.*
 !.env.example
+Design/

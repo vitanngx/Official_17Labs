@@ -119,12 +119,20 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
   
   // Contribution calculations
   const winners = [...reality.holdings]
-    .filter(h => h.totalPnL > 0)
-    .sort((a, b) => b.totalPnL - a.totalPnL);
+    .map((holding) => ({
+      ...holding,
+      totalPnLBase: holding.totalPnL * holding.fxRate
+    }))
+    .filter((holding) => holding.totalPnLBase > 0)
+    .sort((a, b) => b.totalPnLBase - a.totalPnLBase);
     
   const losers = [...reality.holdings]
-    .filter(h => h.totalPnL < 0)
-    .sort((a, b) => a.totalPnL - b.totalPnL);
+    .map((holding) => ({
+      ...holding,
+      totalPnLBase: holding.totalPnL * holding.fxRate
+    }))
+    .filter((holding) => holding.totalPnLBase < 0)
+    .sort((a, b) => a.totalPnLBase - b.totalPnLBase);
 
   const renderSummary = () => {
     if (!analytics || !analytics.dates || analytics.dates.length === 0) return null;
@@ -391,11 +399,16 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
         <div className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
           <h2 className="text-xl font-black mb-4 text-green-500">{t("analytics.topWinners") || "Top Winners"}</h2>
           {winners.length > 0 ? (
-            <div className="space-y-3">
-              {winners.slice(0, 5).map(w => (
-                <div key={w.asset} className="flex justify-between items-center border-b border-[var(--border)] pb-2 font-mono text-[13px] font-bold">
-                  <span>{w.asset}</span>
-                  <span className="text-green-500">+{formatCurrency(w.totalPnL * w.fxRate, baseCurr)}</span>
+            <div className="max-h-[300px] space-y-3 overflow-y-auto pr-2">
+              {winners.map((w, index) => (
+                <div key={w.asset} className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-2 font-mono text-[13px] font-bold">
+                  <span className="flex items-center gap-3">
+                    <span className="min-w-6 text-right opacity-50">#{index + 1}</span>
+                    <span>{w.asset}</span>
+                  </span>
+                  <span className="whitespace-nowrap text-green-500">
+                    +{formatCurrency(w.totalPnLBase, baseCurr)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -407,11 +420,16 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
         <div className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
           <h2 className="text-xl font-black mb-4 text-red-500">{t("analytics.topLosers") || "Top Losers"}</h2>
           {losers.length > 0 ? (
-            <div className="space-y-3">
-              {losers.slice(0, 5).map(l => (
-                <div key={l.asset} className="flex justify-between items-center border-b border-[var(--border)] pb-2 font-mono text-[13px] font-bold">
-                  <span>{l.asset}</span>
-                  <span className="text-red-500">{formatCurrency(l.totalPnL * l.fxRate, baseCurr)}</span>
+            <div className="max-h-[300px] space-y-3 overflow-y-auto pr-2">
+              {losers.map((l, index) => (
+                <div key={l.asset} className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-2 font-mono text-[13px] font-bold">
+                  <span className="flex items-center gap-3">
+                    <span className="min-w-6 text-right opacity-50">#{index + 1}</span>
+                    <span>{l.asset}</span>
+                  </span>
+                  <span className="whitespace-nowrap text-red-500">
+                    {formatCurrency(l.totalPnLBase, baseCurr)}
+                  </span>
                 </div>
               ))}
             </div>

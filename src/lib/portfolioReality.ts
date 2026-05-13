@@ -36,7 +36,7 @@ const COLORS = [
   "#A78BFA"
 ];
 const RISK_METRICS_TTL_MS = 24 * 60 * 60 * 1000;
-const RISK_METRICS_CACHE_VERSION = 4;
+const RISK_METRICS_CACHE_VERSION = 5;
 const RISK_LOOKBACK_YEARS = 5;
 const DEFAULT_RISK_FREE_RATE = 0.05;
 const TRADING_DAYS_PER_YEAR = 252;
@@ -288,12 +288,20 @@ async function buildRiskMetrics(
 
   const positions = new Map<string, number>();
   const cashBalances = new Map<string, number>();
-  const navSeries: Array<{ date: string; value: number }> = [];
+  const navSeries: Array<{ date: string; value: number; externalFlowBase?: number }> = [];
 
   for (const date of dates) {
     const dayTransactions = transactionsByDate.get(date) ?? [];
+    let externalFlowBase = 0;
     for (const transaction of dayTransactions) {
-      applyTransactionToRiskState(transaction, positions, cashBalances, activeAssets);
+      const externalFlow = applyTransactionToRiskState(
+        transaction,
+        positions,
+        cashBalances,
+        activeAssets
+      );
+      externalFlowBase +=
+        externalFlow * getStaticFxRate(transaction.currency, baseCurrency, holdings);
     }
 
     let totalValue = 0;
@@ -317,7 +325,7 @@ async function buildRiskMetrics(
       totalValue += amount * getStaticFxRate(currency, baseCurrency, holdings);
     }
 
-    navSeries.push({ date, value: totalValue });
+    navSeries.push({ date, value: totalValue, externalFlowBase });
   }
 
   const replayMetrics = calculateRiskMetrics(navSeries);
@@ -353,7 +361,9 @@ function buildCurrentHoldingsNavSeries(
   }));
 }
 
-function calculateRiskMetrics(navSeries: Array<{ date: string; value: number }>): RiskMetrics | null {
+function calculateRiskMetrics(
+  navSeries: Array<{ date: string; value: number; externalFlowBase?: number }>
+): RiskMetrics | null {
   const cleanNavSeries = navSeries
     .filter((point) => Number.isFinite(point.value) && point.value > 0)
     .sort((left, right) => left.date.localeCompare(right.date));
@@ -366,8 +376,9 @@ function calculateRiskMetrics(navSeries: Array<{ date: string; value: number }>)
   for (let index = 1; index < cleanNavSeries.length; index += 1) {
     const previous = cleanNavSeries[index - 1].value;
     const current = cleanNavSeries[index].value;
+    const externalFlow = cleanNavSeries[index].externalFlowBase ?? 0;
     if (previous > 0 && current > 0) {
-      returns.push(current / previous - 1);
+      returns.push((current - externalFlow) / previous - 1);
     }
   }
 
@@ -495,7 +506,10 @@ function fundNegativeCashBalance(balances: Map<string, number>, currency: string
   const balance = balances.get(currency) ?? 0;
   if (balance < 0) {
     balances.set(currency, 0);
+    return Math.abs(balance);
   }
+
+  return 0;
 }
 
 function isCashTransfer(transaction: PortfolioTransaction) {
@@ -547,8 +561,7 @@ function applyTransactionToRiskState(
   if (transaction.type === "BUY") {
     positions.set(transaction.asset, (positions.get(transaction.asset) ?? 0) + transaction.amount);
     adjustCash(cashBalances, transaction.currency, -(gross + fees));
-    fundNegativeCashBalance(cashBalances, transaction.currency);
-    return;
+    return fundNegativeCashBalance(cashBalances, transaction.currency);
   }
 
   if (transaction.type === "SELL") {
@@ -557,32 +570,35 @@ function applyTransactionToRiskState(
       Math.max(0, (positions.get(transaction.asset) ?? 0) - transaction.amount)
     );
     adjustCash(cashBalances, transaction.currency, gross - fees);
-    return;
+    return 0;
   }
 
   if (transaction.type === "CASH_IN") {
     adjustCash(cashBalances, transaction.currency, gross - fees);
-    return;
+    return gross - fees;
   }
 
   if (transaction.type === "CASH_OUT") {
     adjustCash(cashBalances, transaction.currency, -(gross + fees));
-    return;
+    return -(gross + fees);
   }
 
   if (transaction.type === "DIVIDEND") {
     adjustCash(cashBalances, transaction.currency, gross - fees);
-    return;
+    return 0;
   }
 
   if (transaction.type === "TRANSFER" && activeAssets.has(transaction.asset)) {
     positions.set(transaction.asset, (positions.get(transaction.asset) ?? 0) + transaction.amount);
-    return;
+    return 0;
   }
 
   if (transaction.type === "TRANSFER") {
     adjustCash(cashBalances, transaction.currency, gross - fees);
+    return gross - fees;
   }
+
+  return 0;
 }
 
 function findHistoryPriceAtDate(

@@ -25,6 +25,19 @@ interface PortfolioTrackerTabProps {
   optimizedWeights: Record<string, number>;
 }
 
+interface TransactionDraft {
+  type: TransactionType;
+  date: string;
+  asset: string;
+  amount: string;
+  price: string;
+  fees: string;
+  currency: string;
+  note: string;
+}
+
+type TranslateFn = ReturnType<typeof useTranslation>["t"];
+
 const TRANSACTION_TYPES: TransactionType[] = [
   "BUY",
   "SELL",
@@ -71,9 +84,11 @@ export default function PortfolioTrackerTab({
   const [transactions, setTransactions] = React.useState<PortfolioTransaction[]>([]);
   const [reality, setReality] = React.useState<PortfolioRealityPayload | null>(null);
   const [draft, setDraft] = React.useState(createDraft());
+  const [editDraft, setEditDraft] = React.useState(createDraft());
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [editError, setEditError] = React.useState<string | null>(null);
   const holdingsValueBase = React.useMemo(
     () => (reality?.holdings ?? []).reduce((sum, holding) => sum + holding.marketValueBase, 0),
     [reality]
@@ -173,21 +188,42 @@ export default function PortfolioTrackerTab({
     event.preventDefault();
     setError(null);
 
+    const saved = await saveTransaction(draft, null);
+    if (saved) {
+      setDraft(createDraft());
+    }
+  }
+
+  async function submitEditTransaction(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingId) {
+      return;
+    }
+
+    setEditError(null);
+    const saved = await saveTransaction(editDraft, editingId);
+    if (saved) {
+      closeEditModal();
+    }
+  }
+
+  async function saveTransaction(source: TransactionDraft, transactionId: string | null) {
     const input: TransactionInput = {
-      type: draft.type,
-      date: draft.date,
-      asset: draft.asset,
-      amount: Number(draft.amount),
-      price: Number(draft.price),
-      fees: Number(draft.fees || "0"),
-      note: draft.note,
-      currency: draft.currency
+      type: source.type,
+      date: source.date,
+      asset: source.asset,
+      amount: Number(source.amount),
+      price: Number(source.price),
+      fees: Number(source.fees || "0"),
+      note: source.note,
+      currency: source.currency
     };
 
     const response = await fetch(
-      editingId ? `/api/portfolio/transactions?id=${editingId}` : "/api/portfolio/transactions",
+      transactionId ? `/api/portfolio/transactions?id=${transactionId}` : "/api/portfolio/transactions",
       {
-      method: editingId ? "PATCH" : "POST",
+      method: transactionId ? "PATCH" : "POST",
       headers: {
         "Content-Type": "application/json"
       },
@@ -198,20 +234,23 @@ export default function PortfolioTrackerTab({
 
     if (!response.ok || !payload.ok) {
       const message = payload.error ?? "Unable to save transaction.";
-      setError(message);
+      if (transactionId) {
+        setEditError(message);
+      } else {
+        setError(message);
+      }
       onNotify?.(message, "error");
-      return;
+      return false;
     }
 
-    setDraft(createDraft());
-    setEditingId(null);
     await refresh();
-    onNotify?.(editingId ? t("reality.toast.updated") : t("reality.toast.added"), "success");
+    onNotify?.(transactionId ? t("reality.toast.updated") : t("reality.toast.added"), "success");
+    return true;
   }
 
   function startEdit(transaction: PortfolioTransaction) {
     setEditingId(transaction.id);
-    setDraft({
+    setEditDraft({
       type: transaction.type,
       date: transaction.date,
       asset: transaction.asset,
@@ -221,6 +260,13 @@ export default function PortfolioTrackerTab({
       currency: transaction.currency,
       note: transaction.note ?? ""
     });
+    setEditError(null);
+  }
+
+  function closeEditModal() {
+    setEditingId(null);
+    setEditDraft(createDraft());
+    setEditError(null);
   }
 
   async function deleteRow(id: string) {
@@ -358,26 +404,12 @@ export default function PortfolioTrackerTab({
               </Field>
             </div>
 
-            <div className="flex gap-3">
-              {editingId ? (
-                <button
-                  className="h-12 flex-1 rounded border-2 border-[var(--border)] bg-[var(--panel)] px-4 font-mono text-[13px] font-black uppercase shadow-[5px_5px_0_var(--shadow)]"
-                  type="button"
-                  onClick={() => {
-                    setEditingId(null);
-                    setDraft(createDraft());
-                  }}
-                >
-                  Cancel
-                </button>
-              ) : null}
-              <button
-                className="h-12 flex-1 rounded border-2 border-[var(--border)] bg-[var(--primary)] text-[#1C293C] px-4 font-mono text-[13px] font-black uppercase shadow-[5px_5px_0_var(--shadow)] active:translate-x-1 active:translate-y-1 active:shadow-none"
-                type="submit"
-              >
-                {editingId ? t("reality.updateTransaction") : t("reality.addTransaction")}
-              </button>
-            </div>
+            <button
+              className="h-12 w-full rounded border-2 border-[var(--border)] bg-[var(--primary)] text-[#1C293C] px-4 font-mono text-[13px] font-black uppercase shadow-[5px_5px_0_var(--shadow)] active:translate-x-1 active:translate-y-1 active:shadow-none"
+              type="submit"
+            >
+              {t("reality.addTransaction")}
+            </button>
           </form>
 
           {error ? (
@@ -546,6 +578,16 @@ export default function PortfolioTrackerTab({
           </section>
         </div>
       </div>
+      {editingId ? (
+        <EditTransactionModal
+          draft={editDraft}
+          error={editError}
+          t={t}
+          onChange={setEditDraft}
+          onClose={closeEditModal}
+          onSubmit={submitEditTransaction}
+        />
+      ) : null}
     </section>
   );
 }
@@ -635,6 +677,161 @@ function PiePanel({ title, data, emptyLabel }: { title: string; data: Allocation
   );
 }
 
+function EditTransactionModal({
+  draft,
+  error,
+  t,
+  onChange,
+  onClose,
+  onSubmit
+}: {
+  draft: TransactionDraft;
+  error: string | null;
+  t: TranslateFn;
+  onChange: React.Dispatch<React.SetStateAction<TransactionDraft>>;
+  onClose: () => void;
+  onSubmit: React.FormEventHandler<HTMLFormElement>;
+}) {
+  function updateDraft(patch: Partial<TransactionDraft>) {
+    onChange((current) => ({ ...current, ...patch }));
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-4 py-6 backdrop-blur-sm"
+      role="dialog"
+    >
+      <motion.div
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="max-h-[90vh] w-full max-w-[720px] overflow-y-auto rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 text-[var(--text)] shadow-[10px_10px_0_var(--shadow)]"
+        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        transition={{ duration: 0.18, ease: "easeOut" }}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
+              {t("reality.ledger")}
+            </p>
+            <h2 className="mt-1 text-[27px] font-black">
+              {t("reality.updateTransaction")}
+            </h2>
+          </div>
+          <button
+            aria-label={t("reality.cancel")}
+            className="h-10 w-10 rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] font-mono text-[20px] font-black shadow-[4px_4px_0_var(--shadow)]"
+            type="button"
+            onClick={onClose}
+          >
+            x
+          </button>
+        </div>
+
+        <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label={t("reality.type")}>
+              <select
+                className={FIELD_CLASS}
+                value={draft.type}
+                onChange={(event) =>
+                  updateDraft({ type: event.target.value as TransactionType })
+                }
+              >
+                {TRANSACTION_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("reality.date")}>
+              <input
+                className={FIELD_CLASS}
+                type="date"
+                value={draft.date}
+                onChange={(event) => updateDraft({ date: event.target.value })}
+              />
+            </Field>
+            <Field label={t("reality.asset")}>
+              <input
+                className={`${FIELD_CLASS} font-mono uppercase`}
+                value={draft.asset}
+                onChange={(event) => updateDraft({ asset: event.target.value.toUpperCase() })}
+              />
+            </Field>
+            <Field label={t("reality.currency")}>
+              <input
+                className={`${FIELD_CLASS} font-mono uppercase`}
+                value={draft.currency}
+                onChange={(event) => updateDraft({ currency: event.target.value.toUpperCase() })}
+              />
+            </Field>
+            <Field label={t("reality.amount")}>
+              <input
+                className={`${FIELD_CLASS} font-mono`}
+                min="0"
+                step="0.000001"
+                type="number"
+                value={draft.amount}
+                onChange={(event) => updateDraft({ amount: event.target.value })}
+              />
+            </Field>
+            <Field label={t("reality.price")}>
+              <input
+                className={`${FIELD_CLASS} font-mono`}
+                min="0"
+                step="0.0001"
+                type="number"
+                value={draft.price}
+                onChange={(event) => updateDraft({ price: event.target.value })}
+              />
+            </Field>
+            <Field label={t("reality.fees")}>
+              <input
+                className={`${FIELD_CLASS} font-mono`}
+                min="0"
+                step="0.0001"
+                type="number"
+                value={draft.fees}
+                onChange={(event) => updateDraft({ fees: event.target.value })}
+              />
+            </Field>
+            <Field label={t("reality.note")}>
+              <input
+                className={FIELD_CLASS}
+                value={draft.note}
+                onChange={(event) => updateDraft({ note: event.target.value })}
+              />
+            </Field>
+          </div>
+
+          {error ? (
+            <div className="rounded border-2 border-[var(--danger)] bg-[var(--panel-soft)] p-3 text-[15px] font-bold text-[var(--danger)]">
+              {error}
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button
+              className="h-12 rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] px-5 font-mono text-[13px] font-black uppercase shadow-[5px_5px_0_var(--shadow)]"
+              type="button"
+              onClick={onClose}
+            >
+              {t("reality.cancel")}
+            </button>
+            <button
+              className="h-12 rounded border-2 border-[var(--border)] bg-[var(--primary)] px-5 font-mono text-[13px] font-black uppercase text-[#1C293C] shadow-[5px_5px_0_var(--shadow)] active:translate-x-1 active:translate-y-1 active:shadow-none"
+              type="submit"
+            >
+              {t("reality.updateTransaction")}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 function Field({
   label,
   children
@@ -675,7 +872,7 @@ function calculateHealthScore(
   return Math.max(0, Math.round(100 - totalDeviation / 2));
 }
 
-function createDraft() {
+function createDraft(): TransactionDraft {
   return {
     type: "BUY" as TransactionType,
     date: new Date().toISOString().slice(0, 10),
