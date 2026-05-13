@@ -1,5 +1,8 @@
 # Official 17 Labs Portfolio App
 
+<img width="2824" height="1317" alt="image" src="https://github.com/user-attachments/assets/bcb7d2ff-a928-4319-8986-5ae0634f4fec" />
+
+
 This is the combination of all features that I created in two projects: **17 Labs** and **Portfolio Tracker**.
 
 The app connects strategy optimization with real portfolio tracking. It helps users define an optimized asset allocation, compare it with their actual holdings, and monitor portfolio risk over time.
