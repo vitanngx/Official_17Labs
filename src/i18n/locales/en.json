@@ -156,5 +156,24 @@
   "reality.toast.deleteError": "Unable to delete transaction.",
 
   "toast.errorTitle": "Action needed",
-  "toast.updateTitle": "Update"
+  "toast.updateTitle": "Update",
+
+  "nav.analytics": "Analytics",
+  "analytics.totalPnL": "Total PnL",
+  "analytics.unrealizedPnL": "Unrealized PnL",
+  "analytics.realizedPnL": "Realized PnL",
+  "analytics.dividends": "Dividends",
+  "analytics.navChartTitle": "Performance vs Benchmark",
+  "analytics.navChartDesc": "Time-Weighted Return (TWR) Indexed to 100",
+  "analytics.calculating": "Calculating historical performance...",
+  "analytics.breakdown": "PnL Breakdown",
+  "analytics.topWinners": "Top Winners",
+  "analytics.topLosers": "Top Losers",
+  "analytics.noWinners": "No positive contributors yet.",
+  "analytics.noLosers": "No negative contributors yet.",
+  "analytics.shortHistory": "Portfolio history is short. Add older transactions to see a longer trend.",
+  "analytics.benchmarkFail": "Failed to fetch benchmark data.",
+  "analytics.backtestDesc": "Current Mix Simulated Historical Performance",
+  "analytics.error": "Failed to fetch analytics data",
+  "analytics.empty": "Add transactions in Reality tab to view analytics."
 }

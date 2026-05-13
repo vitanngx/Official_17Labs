@@ -46,6 +46,8 @@ interface PositionState {
   amount: number;
   costBasis: number;
   currency: string;
+  realizedPnL: number;
+  dividends: number;
 }
 
 export async function buildPortfolioReality(
@@ -61,7 +63,9 @@ export async function buildPortfolioReality(
       asset: transaction.asset,
       amount: 0,
       costBasis: 0,
-      currency: transaction.currency
+      currency: transaction.currency,
+      realizedPnL: 0,
+      dividends: 0
     };
     const gross = transaction.amount * transaction.price;
     const fees = transaction.fees ?? 0;
@@ -79,6 +83,7 @@ export async function buildPortfolioReality(
       const averageCost = position.amount > 0 ? position.costBasis / position.amount : 0;
       position.amount -= sellAmount;
       position.costBasis = Math.max(0, position.costBasis - averageCost * sellAmount);
+      position.realizedPnL += (transaction.price - averageCost) * sellAmount - fees;
       positions.set(transaction.asset, position);
       adjustCash(cashBalances, transaction.currency, sellAmount * transaction.price - fees);
       continue;
@@ -95,6 +100,8 @@ export async function buildPortfolioReality(
     }
 
     if (transaction.type === "DIVIDEND") {
+      position.dividends += gross;
+      positions.set(transaction.asset, position);
       adjustCash(cashBalances, transaction.currency, gross - fees);
       continue;
     }
@@ -111,7 +118,7 @@ export async function buildPortfolioReality(
 
   const holdings = await Promise.all(
     [...positions.values()]
-      .filter((position) => position.amount > 0)
+      .filter((position) => position.amount > 0 || position.realizedPnL !== 0 || position.dividends !== 0)
       .map(async (position) => buildHolding(position, baseCurrency, warnings))
   );
 
@@ -123,8 +130,28 @@ export async function buildPortfolioReality(
   );
   const totalValueBase = holdingsValueBase + deployableCashValueBase;
 
+  let capitalInvestedBase = 0;
+  let totalRealizedPnLBase = 0;
+  let totalUnrealizedPnLBase = 0;
+  let totalDividendsBase = 0;
+  let totalPnLBase = 0;
+
+  for (const transaction of transactions) {
+    if (transaction.type === "CASH_IN") {
+      const fx = await fetchFxRate(transaction.currency, baseCurrency).catch(() => 1);
+      capitalInvestedBase += (transaction.amount * transaction.price) * fx;
+    } else if (transaction.type === "CASH_OUT") {
+      const fx = await fetchFxRate(transaction.currency, baseCurrency).catch(() => 1);
+      capitalInvestedBase -= (transaction.amount * transaction.price) * fx;
+    }
+  }
+
   holdings.forEach((holding) => {
     holding.weightPct = totalValueBase > 0 ? (holding.marketValueBase / totalValueBase) * 100 : 0;
+    totalRealizedPnLBase += holding.realizedPnL * holding.fxRate;
+    totalUnrealizedPnLBase += holding.unrealizedPnL * holding.fxRate;
+    totalDividendsBase += holding.dividends * holding.fxRate;
+    totalPnLBase += holding.totalPnL * holding.fxRate;
   });
   cash.forEach((balance) => {
     balance.weightPct =
@@ -139,6 +166,11 @@ export async function buildPortfolioReality(
     ok: true,
     baseCurrency,
     totalValueBase,
+    capitalInvestedBase,
+    totalRealizedPnLBase,
+    totalUnrealizedPnLBase,
+    totalDividendsBase,
+    totalPnLBase,
     holdings: holdings.sort((left, right) => right.marketValueBase - left.marketValueBase),
     cashBalances: cash,
     currentWeights: buildCurrentWeights(holdings, cash),
@@ -183,6 +215,9 @@ async function buildHolding(
     warnings.push(`${position.currency}/${baseCurrency}: FX unavailable, using 1.0.`);
   }
 
+  const unrealizedPnL = position.amount > 0 ? (currentPrice - averageCost) * position.amount : 0;
+  const totalPnL = position.realizedPnL + unrealizedPnL + position.dividends;
+
   return {
     asset: position.asset,
     amount: position.amount,
@@ -191,7 +226,11 @@ async function buildHolding(
     currentPrice,
     fxRate,
     marketValueBase: position.amount * currentPrice * fxRate,
-    weightPct: 0
+    weightPct: 0,
+    realizedPnL: position.realizedPnL,
+    unrealizedPnL,
+    dividends: position.dividends,
+    totalPnL
   };
 }
 

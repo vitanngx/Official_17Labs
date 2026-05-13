@@ -5,15 +5,8 @@ import en from "./locales/en.json";
 import vi from "./locales/vi.json";
 import fr from "./locales/fr.json";
 
-export type Locale = "en" | "vi" | "fr";
-
-export const LOCALES: Locale[] = ["en", "vi", "fr"];
-export const DEFAULT_LOCALE: Locale = "en";
-export const LOCALE_LABELS: Record<Locale, string> = {
-  en: "🇺🇸 EN",
-  vi: "🇻🇳 VI",
-  fr: "🇫🇷 FR",
-};
+export * from "./config";
+import { Locale, DEFAULT_LOCALE } from "./config";
 
 type Dict = Record<string, string>;
 const dictionaries: Record<Locale, Dict> = { en, vi, fr };

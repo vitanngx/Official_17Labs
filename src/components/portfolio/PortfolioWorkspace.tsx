@@ -4,10 +4,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import React from "react";
 import PortfolioTrackerTab from "@/components/portfolio/PortfolioTrackerTab";
 import StrategyTab from "@/components/portfolio/StrategyTab";
+import AnalyticsTab from "@/components/portfolio/AnalyticsTab";
 import AuthModal from "@/components/portfolio/AuthModal";
 import { useTranslation, LOCALES, LOCALE_LABELS } from "@/i18n";
 
-type ActiveTab = "strategy" | "reality";
+type ActiveTab = "strategy" | "reality" | "analytics";
 type ThemeMode = "light" | "dark";
 type ToastTone = "error" | "success" | "info";
 
@@ -38,7 +39,7 @@ export default function PortfolioWorkspace() {
           theme?: ThemeMode;
         };
 
-        if (saved.activeTab === "strategy" || saved.activeTab === "reality") {
+        if (saved.activeTab === "strategy" || saved.activeTab === "reality" || saved.activeTab === "analytics") {
           setActiveTab(saved.activeTab);
         }
         if (saved.optimizedWeights && typeof saved.optimizedWeights === "object") {
@@ -107,6 +108,9 @@ export default function PortfolioWorkspace() {
               <TabButton active={activeTab === "reality"} onClick={() => setActiveTab("reality")}>
                 {t("nav.reality")}
               </TabButton>
+              <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>
+                {t("nav.analytics") || "Analytics"}
+              </TabButton>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -142,10 +146,14 @@ export default function PortfolioWorkspace() {
           initial={{ opacity: 0, y: 12 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
-          {activeTab === "strategy" ? (
+          {activeTab === "strategy" && (
             <StrategyTab onNotify={notify} onOptimizedWeightsChange={setOptimizedWeights} />
-          ) : (
+          )}
+          {activeTab === "reality" && (
             <PortfolioTrackerTab optimizedWeights={optimizedWeights} onNotify={notify} />
+          )}
+          {activeTab === "analytics" && (
+            <AnalyticsTab onNotify={notify} />
           )}
         </motion.div>
       </AnimatePresence>

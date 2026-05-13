@@ -153,5 +153,24 @@
   "reality.toast.deleteError": "Impossible de supprimer la transaction.",
 
   "toast.errorTitle": "Action requise",
-  "toast.updateTitle": "Mise à jour"
+  "toast.updateTitle": "Mise à jour",
+
+  "nav.analytics": "Analytique",
+  "analytics.totalPnL": "P&L Total",
+  "analytics.unrealizedPnL": "P&L Non Réalisé",
+  "analytics.realizedPnL": "P&L Réalisé",
+  "analytics.dividends": "Dividendes",
+  "analytics.navChartTitle": "Performance vs Référence",
+  "analytics.navChartDesc": "Rendement Pondéré dans le Temps (TWR) indexé sur 100",
+  "analytics.calculating": "Calcul de la performance historique...",
+  "analytics.breakdown": "Répartition P&L",
+  "analytics.topWinners": "Meilleurs Gagnants",
+  "analytics.topLosers": "Pires Perdants",
+  "analytics.noWinners": "Aucun contributeur positif pour le moment.",
+  "analytics.noLosers": "Aucun contributeur négatif pour le moment.",
+  "analytics.shortHistory": "L'historique est court. Ajoutez d'anciennes transactions pour voir la tendance.",
+  "analytics.benchmarkFail": "Échec du chargement des données de référence.",
+  "analytics.backtestDesc": "Performance Historique Simulée du Mix Actuel",
+  "analytics.error": "Erreur lors du chargement des données analytiques",
+  "analytics.empty": "Ajoutez des transactions dans l'onglet Réalité pour voir les analyses."
 }

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import "./globals.css";
 import I18nWrapper from "@/components/I18nWrapper";
-import { Locale, LOCALES } from "@/i18n";
+import { Locale, LOCALES } from "@/i18n/config";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://17labs.app";
 

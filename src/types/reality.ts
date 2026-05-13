@@ -25,6 +25,10 @@ export interface HoldingReality {
   fxRate: number;
   marketValueBase: number;
   weightPct: number;
+  realizedPnL: number;
+  unrealizedPnL: number;
+  dividends: number;
+  totalPnL: number;
 }
 
 export interface AllocationSlice {
@@ -64,6 +68,11 @@ export interface PortfolioRealityPayload {
   ok: boolean;
   baseCurrency: string;
   totalValueBase: number;
+  capitalInvestedBase: number;
+  totalRealizedPnLBase: number;
+  totalUnrealizedPnLBase: number;
+  totalDividendsBase: number;
+  totalPnLBase: number;
   holdings: HoldingReality[];
   cashBalances: CashBalanceReality[];
   currentWeights: AllocationSlice[];

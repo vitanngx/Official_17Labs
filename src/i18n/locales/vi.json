@@ -153,5 +153,24 @@
   "reality.toast.deleteError": "Không thể xóa giao dịch.",
 
   "toast.errorTitle": "Cần hành động",
-  "toast.updateTitle": "Cập nhật"
+  "toast.updateTitle": "Cập nhật",
+
+  "nav.analytics": "Phân Tích",
+  "analytics.totalPnL": "Tổng Lãi/Lỗ",
+  "analytics.unrealizedPnL": "Lãi/Lỗ Chưa Chốt",
+  "analytics.realizedPnL": "Lãi/Lỗ Đã Chốt",
+  "analytics.dividends": "Cổ Tức",
+  "analytics.navChartTitle": "Hiệu Suất vs Chỉ Số Tham Chiếu",
+  "analytics.navChartDesc": "Lợi nhuận gia quyền theo thời gian (TWR) quy về 100",
+  "analytics.calculating": "Đang tính toán hiệu suất lịch sử...",
+  "analytics.breakdown": "Chi Tiết Lãi/Lỗ",
+  "analytics.topWinners": "Mã Lãi Nhiều Nhất",
+  "analytics.topLosers": "Mã Lỗ Nhiều Nhất",
+  "analytics.noWinners": "Chưa có mã nào sinh lời.",
+  "analytics.noLosers": "Chưa có mã nào thua lỗ.",
+  "analytics.shortHistory": "Dữ liệu lịch sử quá ngắn. Hãy thêm giao dịch cũ hơn để xem xu hướng.",
+  "analytics.benchmarkFail": "Lỗi khi tải dữ liệu cho benchmark này.",
+  "analytics.backtestDesc": "Mô phỏng hiệu suất quá khứ theo tỷ trọng hiện tại",
+  "analytics.error": "Lỗi khi tải dữ liệu phân tích",
+  "analytics.empty": "Thêm giao dịch ở tab Thực Tế để xem phân tích."
 }

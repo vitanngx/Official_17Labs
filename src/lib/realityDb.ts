@@ -23,7 +23,7 @@ declare global {
 
 let dbInstance: DatabaseSync | undefined;
 
-function getDatabase(): DatabaseSync {
+export function getDatabase(): DatabaseSync {
   if (process.env.NODE_ENV !== "production") {
     if (globalThis.__realityDb) {
       return globalThis.__realityDb;
