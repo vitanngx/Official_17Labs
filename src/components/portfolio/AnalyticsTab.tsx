@@ -16,6 +16,17 @@ import { useTranslation } from "@/i18n";
 import { PortfolioRealityPayload } from "@/types/reality";
 import { formatCurrency, formatPercent } from "@/lib/formatters";
 
+const BENCHMARK_OPTIONS = [
+  { value: "SPY", label: "S&P 500 (SPY)" },
+  { value: "QQQ", label: "Nasdaq 100 (QQQ)" },
+  { value: "^VNINDEX", label: "VN-Index" },
+  { value: "^FCHI", label: "CAC 40" },
+  { value: "BTC-USD", label: "Bitcoin" },
+  { value: "CRYPTO_TOTAL", label: "Total Crypto Market Cap" }
+];
+
+const PRESET_BENCHMARK_VALUES = BENCHMARK_OPTIONS.map((option) => option.value);
+
 interface AnalyticsTabProps {
   onNotify?: (message: string, tone?: "success" | "error" | "info") => void;
 }
@@ -39,6 +50,8 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
   const [customBenchmark, setCustomBenchmark] = useState("");
   const [dateRange, setDateRange] = useState("ALL");
   const ranges = ["1M", "3M", "6M", "YTD", "1Y", "5Y", "ALL"];
+  const selectedBenchmarkLabel =
+    BENCHMARK_OPTIONS.find((option) => option.value === benchmark)?.label ?? benchmark;
 
   useEffect(() => {
     async function fetchData() {
@@ -245,7 +258,7 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
             </div>
             <div className="flex items-center gap-2">
               <select 
-                value={["SPY", "QQQ", "^VNINDEX", "BTC-USD"].includes(benchmark) ? benchmark : "CUSTOM"}
+                value={PRESET_BENCHMARK_VALUES.includes(benchmark) ? benchmark : "CUSTOM"}
                 onChange={(e) => {
                   if (e.target.value !== "CUSTOM") {
                     setBenchmark(e.target.value);
@@ -254,13 +267,12 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
                 }}
                 className="h-9 rounded border-2 border-[var(--border)] bg-[var(--surface)] px-2 font-mono text-xs font-bold outline-none"
               >
-                <option value="SPY">S&P 500 (SPY)</option>
-                <option value="QQQ">Nasdaq 100 (QQQ)</option>
-                <option value="^VNINDEX">VN-Index</option>
-                <option value="BTC-USD">Bitcoin</option>
+                {BENCHMARK_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
                 <option value="CUSTOM">Custom...</option>
               </select>
-              {!["SPY", "QQQ", "^VNINDEX", "BTC-USD"].includes(benchmark) && (
+              {!PRESET_BENCHMARK_VALUES.includes(benchmark) && (
                 <div className="flex h-9 rounded border-2 border-[var(--border)] bg-[var(--surface)] overflow-hidden">
                   <input 
                     type="text" 
@@ -330,7 +342,7 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
                   <Line 
                     type="monotone" 
                     dataKey="benchmark" 
-                    name={benchmark} 
+                    name={selectedBenchmarkLabel} 
                     stroke="var(--secondary)" 
                     strokeWidth={2} 
                     dot={false} 

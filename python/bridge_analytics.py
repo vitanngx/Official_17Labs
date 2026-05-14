@@ -4,8 +4,75 @@ import logging
 import pandas as pd
 import yfinance as yf
 import traceback
+import contextlib
+import io
+import urllib.parse
+import urllib.request
 
 logging.basicConfig(level=logging.ERROR)
+
+CRYPTO_TOTAL_SYMBOL = "CRYPTO_TOTAL"
+VNINDEX_SYMBOL = "^VNINDEX"
+COINGECKO_API_BASE = "https://api.coingecko.com/api/v3"
+COINGECKO_HEADERS = {"User-Agent": "Official17Labs/1.0"}
+COINGECKO_TOP_COIN_COUNT = 10
+
+def fetch_json(url):
+    request = urllib.request.Request(url, headers=COINGECKO_HEADERS)
+    with urllib.request.urlopen(request, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+def fetch_total_crypto_market_cap(start_date, end_date):
+    start_ts = int(pd.Timestamp(start_date).timestamp())
+    end_ts = int((pd.Timestamp(end_date) + pd.Timedelta(days=1)).timestamp())
+
+    markets_params = urllib.parse.urlencode({
+        "vs_currency": "usd",
+        "order": "market_cap_desc",
+        "per_page": COINGECKO_TOP_COIN_COUNT,
+        "page": 1,
+        "sparkline": "false"
+    })
+    markets = fetch_json(f"{COINGECKO_API_BASE}/coins/markets?{markets_params}")
+
+    total_market_cap = pd.Series(dtype="float64")
+    for coin in markets:
+        coin_id = coin.get("id")
+        if not coin_id:
+            continue
+
+        range_params = urllib.parse.urlencode({
+            "vs_currency": "usd",
+            "from": start_ts,
+            "to": end_ts
+        })
+        chart = fetch_json(f"{COINGECKO_API_BASE}/coins/{coin_id}/market_chart/range?{range_params}")
+        market_caps = chart.get("market_caps", [])
+        if not market_caps:
+            continue
+
+        coin_frame = pd.DataFrame(market_caps, columns=["timestamp", "market_cap"])
+        coin_frame["date"] = pd.to_datetime(coin_frame["timestamp"], unit="ms").dt.strftime("%Y-%m-%d")
+        daily_caps = coin_frame.groupby("date")["market_cap"].last()
+        total_market_cap = total_market_cap.add(daily_caps, fill_value=0)
+
+    return total_market_cap.sort_index()
+
+def fetch_vnindex_history(start_date, end_date):
+    output_buffer = io.StringIO()
+    with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(output_buffer):
+        from vnstock.api.quote import Quote
+
+        quote = Quote(symbol="VNINDEX", source="VCI")
+        history = quote.history(start=start_date, end=end_date, interval="1D")
+
+    if history.empty or "time" not in history.columns or "close" not in history.columns:
+        return pd.Series(dtype="float64")
+
+    close = history[["time", "close"]].copy()
+    close["date"] = pd.to_datetime(close["time"]).dt.strftime("%Y-%m-%d")
+    close = close.dropna(subset=["close"])
+    return close.groupby("date")["close"].last().sort_index()
 
 def run_analytics(transactions, base_currency, benchmark_symbol, date_range="ALL", mode="ACTUAL"):
     if not transactions:
@@ -59,12 +126,19 @@ def run_analytics(transactions, base_currency, benchmark_symbol, date_range="ALL
     prices = pd.DataFrame()
     for ticker_sym in all_tickers:
         try:
-            ticker = yf.Ticker(ticker_sym)
-            hist = ticker.history(start=start_date_fetch, end=end_date)
-            if not hist.empty:
-                close = hist["Close"].copy()
-                normalized_index = close.index.tz_localize(None).strftime("%Y-%m-%d")
-                close.index = normalized_index
+            if ticker_sym == CRYPTO_TOTAL_SYMBOL:
+                close = fetch_total_crypto_market_cap(start_date_fetch, end_date)
+            elif ticker_sym == VNINDEX_SYMBOL:
+                close = fetch_vnindex_history(start_date_fetch, end_date)
+            else:
+                ticker = yf.Ticker(ticker_sym)
+                hist = ticker.history(start=start_date_fetch, end=end_date)
+                close = hist["Close"].copy() if not hist.empty else pd.Series(dtype="float64")
+                if not close.empty:
+                    normalized_index = close.index.tz_localize(None).strftime("%Y-%m-%d")
+                    close.index = normalized_index
+
+            if not close.empty:
                 close = close[~close.index.duplicated(keep="last")]
                 prices[ticker_sym] = close
         except Exception as e:

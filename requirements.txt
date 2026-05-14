@@ -3,3 +3,4 @@ uvicorn
 numpy
 pandas
 yfinance
+vnstock>=4.0.2
