@@ -5,6 +5,9 @@ import { PortfolioTransaction } from "@/types/reality";
 import { listTransactions, getMarketCache, setMarketCache } from "@/lib/realityDb";
 import { createHash } from "node:crypto";
 
+const PYTHON_BIN = process.env.PYTHON_BIN?.trim() || "python3";
+const ANALYTICS_CACHE_VERSION = "v2";
+
 export interface AnalyticsResponse {
   ok: boolean;
   dates?: string[];
@@ -28,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Check cache
     const txHashInput = JSON.stringify(transactions);
     const txHash = createHash("md5").update(txHashInput).digest("hex");
-    const cacheKey = `analytics_${txHash}_${baseCurrency}_${benchmark}_${dateRange}_${mode}`;
+    const cacheKey = `analytics_${ANALYTICS_CACHE_VERSION}_${txHash}_${baseCurrency}_${benchmark}_${dateRange}_${mode}`;
     
     const cached = getMarketCache<AnalyticsResponse>(cacheKey);
     if (cached) {
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
     const payload = JSON.stringify({ transactions, baseCurrency, benchmark, dateRange, mode });
 
     return new Promise<NextResponse>((resolve) => {
-      const py = spawn("python3", [pythonScript]);
+      const py = spawn(PYTHON_BIN, [pythonScript]);
 
       let outputData = "";
       let errorData = "";

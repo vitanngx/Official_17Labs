@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 
 const PYTHON_TIMEOUT_MS = 60_000;
 const OPTIMIZER_API_URL = process.env.OPTIMIZER_API_URL?.trim();
+const PYTHON_BIN = process.env.PYTHON_BIN?.trim() || "python3";
 
 interface OptimizerErrorResponse {
   ok: false;
@@ -62,7 +63,7 @@ function runOptimizerBridge(payload: unknown): Promise<unknown> {
   const scriptPath = path.join(process.cwd(), "python", "bridge_optimizer.py");
 
   return new Promise((resolve, reject) => {
-    const child = spawn("python3", [scriptPath], {
+    const child = spawn(PYTHON_BIN, [scriptPath], {
       cwd: process.cwd(),
       stdio: ["pipe", "pipe", "pipe"]
     });

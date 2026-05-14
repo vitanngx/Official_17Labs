@@ -5,7 +5,10 @@ import { useTranslation } from "@/i18n";
 import { motion } from "framer-motion";
 import React from "react";
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -95,11 +98,20 @@ const OPTIMIZATION_GOAL_KEYS: Array<{ labelKey: string; value: OptimizationGoal 
 const STRATEGY_RESULT_VERSION = 3;
 const STRATEGY_STORAGE_KEY = "official.strategyTab.v3";
 const DEFAULT_START_DATE = "2020-01-01";
+const MIN_SIMULATIONS = 1000;
+const DEFAULT_SIMULATIONS = 5000;
+const SLIDER_MAX_SIMULATIONS = 10000;
+const HARD_MAX_SIMULATIONS = 100000;
 const DEFAULT_ASSETS: AssetUniverseItem[] = [
   { asset: "AAPL", assetClass: "US_STOCK", currency: "USD" },
   { asset: "SPY", assetClass: "ETF", currency: "USD" },
   { asset: "BTC-USD", assetClass: "CRYPTO", currency: "USD" },
   { asset: "ETH-USD", assetClass: "CRYPTO", currency: "USD" }
+];
+const SIMULATION_PRESETS = [
+  { labelKey: "strategy.simPreset.fast", value: 2000 },
+  { labelKey: "strategy.simPreset.balanced", value: 5000 },
+  { labelKey: "strategy.simPreset.precise", value: 10000 }
 ];
 
 export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: StrategyTabProps) {
@@ -116,7 +128,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
   const [riskFreeRate, setRiskFreeRate] = React.useState("0.05");
   const [targetReturn, setTargetReturn] = React.useState("0.20");
   const [targetTolerance, setTargetTolerance] = React.useState("0.02");
-  const [numPortfolios, setNumPortfolios] = React.useState(5000);
+  const [numPortfolios, setNumPortfolios] = React.useState(DEFAULT_SIMULATIONS);
   const [assetUniverse, setAssetUniverse] = React.useState(DEFAULT_ASSETS);
   const [result, setResult] = React.useState<OptimizationResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -127,6 +139,10 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
   const [optimizedAtPortfolioHash, setOptimizedAtPortfolioHash] = React.useState<string | null>(null);
 
   const selectedPortfolio = selectPortfolioForGoal(result, optimizationGoal);
+  const distributionStats = React.useMemo(
+    () => buildNormalDistributionStats(selectedPortfolio),
+    [selectedPortfolio]
+  );
   const weightRows = React.useMemo(() => {
     if (!selectedPortfolio) {
       return [];
@@ -150,7 +166,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
       setRiskFreeRate(saved.riskFreeRate);
       setTargetReturn(saved.targetReturn);
       setTargetTolerance(saved.targetTolerance);
-      setNumPortfolios(saved.numPortfolios);
+      setNumPortfolios(normalizeSimulationCount(saved.numPortfolios));
       setAssetUniverse(saved.assetUniverse);
       setResult(saved.result);
       if (saved.optimizedAtPortfolioHash) {
@@ -230,7 +246,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
           riskFreeRate: Number(riskFreeRate),
           targetReturn: Number(targetReturn),
           targetTolerance: Number(targetTolerance),
-          numPortfolios,
+          numPortfolios: normalizeSimulationCount(numPortfolios),
           assetUniverse,
           resultVersion: STRATEGY_RESULT_VERSION
         })
@@ -289,7 +305,7 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
         setTargetTolerance(String(run.config.targetTolerance));
       }
       if (run.config?.numPortfolios !== undefined) {
-        setNumPortfolios(Number(run.config.numPortfolios));
+        setNumPortfolios(normalizeSimulationCount(Number(run.config.numPortfolios)));
       }
       if (Array.isArray(run.config?.assetUniverse) && run.config.assetUniverse.length > 0) {
         setAssetUniverse(run.config.assetUniverse);
@@ -471,27 +487,12 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
               onChange={setTargetTolerance}
             />
 
-            <label className="block">
-              <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
-                {t("strategy.simulations")}
-              </span>
-              <div className="rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-mono text-[15px] font-black">
-                    {numPortfolios.toLocaleString("en-US")}
-                  </span>
-                  <input
-                    className="w-2/3 accent-[var(--secondary)]"
-                    max={100000}
-                    min={1000}
-                    step={1000}
-                    type="range"
-                    value={numPortfolios}
-                    onChange={(event) => setNumPortfolios(Number(event.target.value))}
-                  />
-                </div>
-              </div>
-            </label>
+            <SimulationControl
+              label={t("strategy.simulations")}
+              value={numPortfolios}
+              onChange={setNumPortfolios}
+              t={t}
+            />
 
             <div>
               <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
@@ -630,6 +631,100 @@ export default function StrategyTab({ onNotify, onOptimizedWeightsChange }: Stra
           </section>
 
           <section className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
+                  {t("strategy.distribution.title")}
+                </p>
+                <h2 className="mt-1 text-[27px] font-black">
+                  {t("strategy.distribution.subtitle")}
+                </h2>
+              </div>
+              {distributionStats ? (
+                <div className="rounded border-2 border-[var(--border)] bg-[var(--primary)] px-3 py-2 font-mono text-[13px] font-black text-[#1C293C]">
+                  {t("strategy.distribution.assumption")}
+                </div>
+              ) : null}
+            </div>
+
+            {distributionStats ? (
+              <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="h-[280px] rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-3">
+                  <ResponsiveContainer height="100%" width="100%">
+                    <AreaChart
+                      data={distributionStats.curve}
+                      margin={{ top: 12, right: 18, bottom: 8, left: 4 }}
+                    >
+                      <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" />
+                      <XAxis
+                        dataKey="returnValue"
+                        tickFormatter={(value) => `${Number(value).toFixed(0)}%`}
+                        type="number"
+                      />
+                      <YAxis hide type="number" />
+                      <Tooltip
+                        content={(props) => (
+                          <NormalDistributionTooltip
+                            {...props}
+                            t={t}
+                          />
+                        )}
+                      />
+                      <ReferenceLine
+                        stroke="var(--border)"
+                        strokeWidth={2}
+                        x={0}
+                      />
+                      <Area
+                        dataKey="lossDensity"
+                        fill="var(--danger)"
+                        fillOpacity={0.34}
+                        isAnimationActive={false}
+                        stroke="var(--danger)"
+                        strokeWidth={2}
+                        type="monotone"
+                      />
+                      <Area
+                        dataKey="profitDensity"
+                        fill="var(--success)"
+                        fillOpacity={0.36}
+                        isAnimationActive={false}
+                        stroke="var(--success)"
+                        strokeWidth={2}
+                        type="monotone"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[320px] border-collapse text-left">
+                    <tbody>
+                      {distributionStats.rows.map((row) => (
+                        <tr key={row.labelKey} className="border-b-2 border-[var(--border)]">
+                          <th className="py-3 pr-3 font-mono text-[13px] uppercase">
+                            {t(row.labelKey)}
+                          </th>
+                          <td className="py-3 text-right text-[18px] font-black">
+                            {row.value}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-3 text-[13px] font-bold leading-relaxed text-[var(--muted)]">
+                    {t("strategy.distribution.note")}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 flex min-h-[180px] items-center justify-center rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-4 text-center font-mono text-[15px] font-bold">
+                {t("strategy.distribution.empty")}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
             <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
               {t("strategy.weights.title")}
             </p>
@@ -762,6 +857,133 @@ function PercentControl({
   );
 }
 
+function SimulationControl({
+  label,
+  onChange,
+  t,
+  value
+}: {
+  label: string;
+  onChange: (value: number) => void;
+  t: (key: string, replacements?: Record<string, string | number>) => string;
+  value: number;
+}) {
+  const normalizedValue = normalizeSimulationCount(value);
+  const isAdvanced = normalizedValue > SLIDER_MAX_SIMULATIONS;
+
+  function update(nextValue: number) {
+    onChange(normalizeSimulationCount(nextValue));
+  }
+
+  return (
+    <div>
+      <span className="mb-2 block font-mono text-[13px] font-bold uppercase">
+        {label}
+      </span>
+      <div className="rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-mono text-[15px] font-black">
+            {normalizedValue.toLocaleString("en-US")}
+          </span>
+          <input
+            className="w-2/3 accent-[var(--secondary)]"
+            max={SLIDER_MAX_SIMULATIONS}
+            min={MIN_SIMULATIONS}
+            step={1000}
+            type="range"
+            value={Math.min(normalizedValue, SLIDER_MAX_SIMULATIONS)}
+            onChange={(event) => update(Number(event.target.value))}
+          />
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {SIMULATION_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              className={`min-h-10 rounded border-2 border-[var(--border)] px-2 font-mono text-[12px] font-black uppercase ${
+                normalizedValue === preset.value
+                  ? "bg-[var(--primary)] text-[#1C293C]"
+                  : "bg-[var(--panel)]"
+              }`}
+              type="button"
+              onClick={() => update(preset.value)}
+            >
+              {t(preset.labelKey)}
+            </button>
+          ))}
+        </div>
+
+        <label className="mt-3 block">
+          <span className="mb-2 block font-mono text-[12px] font-bold uppercase text-[var(--muted)]">
+            {t("strategy.simAdvanced")}
+          </span>
+          <input
+            className="h-11 w-full rounded border-2 border-[var(--border)] bg-[var(--panel)] px-3 font-mono text-[14px] font-bold outline-none focus:shadow-[0_0_0_3px_var(--primary)]"
+            inputMode="numeric"
+            max={HARD_MAX_SIMULATIONS}
+            min={MIN_SIMULATIONS}
+            step={1000}
+            type="number"
+            value={normalizedValue}
+            onChange={(event) => update(Number(event.target.value))}
+          />
+        </label>
+
+        {isAdvanced ? (
+          <p className="mt-2 rounded border-2 border-[var(--danger)] bg-[var(--panel)] p-2 font-mono text-[12px] font-bold text-[var(--danger)]">
+            {t("strategy.simAdvancedWarning", {
+              max: HARD_MAX_SIMULATIONS.toLocaleString("en-US")
+            })}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function NormalDistributionTooltip({
+  active,
+  label,
+  payload,
+  t
+}: {
+  active?: boolean;
+  label?: number | string;
+  payload?: Array<{
+    dataKey?: string | number;
+    payload?: unknown;
+    value?: unknown;
+  }>;
+  t: (key: string, replacements?: Record<string, string | number>) => string;
+}) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  const isProfit = payload.some(
+    (item) => item.dataKey === "profitDensity" && item.value !== null
+  );
+  return (
+    <div className="rounded border-2 border-[var(--border)] bg-[var(--panel)] p-3 shadow-[4px_4px_0_var(--shadow)]">
+      <p className="font-mono text-[13px] font-black">
+        {t("strategy.distribution.returnLabel", {
+          value: `${Number(label).toFixed(1)}%`
+        })}
+      </p>
+      <p
+        className={`mt-1 font-mono text-[13px] font-black ${
+          isProfit ? "text-[var(--success)]" : "text-[var(--danger)]"
+        }`}
+      >
+        {t("strategy.distribution.outcome")}:{" "}
+        {isProfit
+          ? t("strategy.distribution.outcomeProfit")
+          : t("strategy.distribution.outcomeLoss")}
+      </p>
+    </div>
+  );
+}
+
 function decimalStringToPercentString(value: string) {
   const decimal = Number(value);
   if (!Number.isFinite(decimal)) {
@@ -781,6 +1003,90 @@ function parseLocaleNumber(value: string) {
 
 function formatInputNumber(value: number) {
   return Number(value.toFixed(6)).toString();
+}
+
+function buildNormalDistributionStats(portfolio: FrontierPoint | null) {
+  if (!portfolio || portfolio.volatility <= 0) {
+    return null;
+  }
+
+  const mean = portfolio.expectedReturn;
+  const stdDev = portfolio.volatility;
+  const lossProbability = normalCdf(0, mean, stdDev);
+  const profitProbability = 1 - lossProbability;
+  const minReturn = mean - stdDev * 3;
+  const maxReturn = mean + stdDev * 3;
+  const step = (maxReturn - minReturn) / 80;
+
+  const curve = Array.from({ length: 81 }, (_, index) => {
+    const returnValue = minReturn + step * index;
+    const density = normalPdf(returnValue, mean, stdDev);
+
+    return {
+      returnValue: returnValue * 100,
+      lossDensity: returnValue < 0 ? density : null,
+      profitDensity: returnValue >= 0 ? density : null
+    };
+  });
+
+  return {
+    curve,
+    rows: [
+      {
+        labelKey: "strategy.distribution.expectedReturn",
+        value: formatPercentValue(mean)
+      },
+      {
+        labelKey: "strategy.distribution.volatility",
+        value: formatPercentValue(stdDev)
+      },
+      {
+        labelKey: "strategy.distribution.profitProbability",
+        value: formatPercentValue(profitProbability)
+      },
+      {
+        labelKey: "strategy.distribution.lossProbability",
+        value: formatPercentValue(lossProbability)
+      }
+    ]
+  };
+}
+
+function normalPdf(value: number, mean: number, stdDev: number) {
+  const z = (value - mean) / stdDev;
+  return Math.exp(-0.5 * z * z) / (stdDev * Math.sqrt(2 * Math.PI));
+}
+
+function normalCdf(value: number, mean: number, stdDev: number) {
+  return 0.5 * (1 + erf((value - mean) / (stdDev * Math.SQRT2)));
+}
+
+function erf(value: number) {
+  const sign = value < 0 ? -1 : 1;
+  const x = Math.abs(value);
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+  const t = 1 / (1 + p * x);
+  const y =
+    1 -
+    (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) *
+      t *
+      Math.exp(-x * x);
+
+  return sign * y;
+}
+
+function normalizeSimulationCount(value: number) {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_SIMULATIONS;
+  }
+
+  const rounded = Math.round(value / 1000) * 1000;
+  return Math.min(HARD_MAX_SIMULATIONS, Math.max(MIN_SIMULATIONS, rounded));
 }
 
 function AssetDraftInput({ onAdd }: { onAdd: (asset: string) => void }) {
@@ -866,7 +1172,8 @@ function readPersistedStrategyState(): PersistedStrategyState | null {
       targetTolerance: parsed.targetTolerance ?? "0.02",
       numPortfolios: parsed.numPortfolios ?? 5000,
       assetUniverse: parsed.assetUniverse,
-      result: parsed.result ?? null
+      result: parsed.result ?? null,
+      optimizedAtPortfolioHash: parsed.optimizedAtPortfolioHash
     };
   } catch {
     return null;

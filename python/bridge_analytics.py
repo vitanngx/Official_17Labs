@@ -15,7 +15,8 @@ def run_analytics(transactions, base_currency, benchmark_symbol, date_range="ALL
     transactions.sort(key=lambda x: x["date"])
     
     # Extract unique assets
-    assets = set(t["asset"] for t in transactions if t["asset"] != base_currency)
+    portfolio_assets = set(t["asset"] for t in transactions if t["asset"] != base_currency)
+    assets = set(portfolio_assets)
     if benchmark_symbol:
         assets.add(benchmark_symbol)
     
@@ -61,7 +62,11 @@ def run_analytics(transactions, base_currency, benchmark_symbol, date_range="ALL
             ticker = yf.Ticker(ticker_sym)
             hist = ticker.history(start=start_date_fetch, end=end_date)
             if not hist.empty:
-                prices[ticker_sym] = hist['Close']
+                close = hist["Close"].copy()
+                normalized_index = close.index.tz_localize(None).strftime("%Y-%m-%d")
+                close.index = normalized_index
+                close = close[~close.index.duplicated(keep="last")]
+                prices[ticker_sym] = close
         except Exception as e:
             logging.warning(f"Could not fetch {ticker_sym}: {e}")
 
@@ -69,16 +74,22 @@ def run_analytics(transactions, base_currency, benchmark_symbol, date_range="ALL
         return {"ok": False, "error": "Could not fetch any historical prices."}
 
     # Forward fill missing prices, then backfill
-    prices = prices.ffill().bfill()
-    prices.index = prices.index.tz_localize(None).strftime('%Y-%m-%d')
+    prices = prices.sort_index().ffill().bfill()
+    prices.index = prices.index.astype(str)
     
-    unique_dates = sorted(list(set(prices.index.tolist() + [t["date"] for t in transactions])))
-    unique_dates = [d for d in unique_dates if d <= end_date]
+    price_dates = sorted(prices.index.unique().tolist())
     if mode == "BACKTEST":
-        unique_dates = [d for d in unique_dates if d >= filter_date]
-        
+        unique_dates = [d for d in price_dates if filter_date <= d <= end_date]
+    else:
+        unique_dates = sorted(list(set(price_dates + [t["date"] for t in transactions])))
+        unique_dates = [d for d in unique_dates if d <= end_date]
+
+    if not unique_dates:
+        return {"ok": False, "error": "Not enough historical price data for this date range."}
+
+    if mode == "BACKTEST":
         # Calculate current holdings exactly
-        current_holdings = {asset: 0.0 for asset in assets if asset != benchmark_symbol}
+        current_holdings = {asset: 0.0 for asset in portfolio_assets}
         for tx in transactions:
             asset = tx["asset"]
             if tx["type"] == "BUY" and asset in current_holdings:
@@ -101,6 +112,8 @@ def run_analytics(transactions, base_currency, benchmark_symbol, date_range="ALL
                                 if fx_sym in prices.columns and pd.notna(prices.at[date, fx_sym]):
                                     fx_rate = prices.at[date, fx_sym]
                             holdings_value += qty * local_price * fx_rate
+            if holdings_value <= 0:
+                continue
             daily_results.append({
                 "date": date,
                 "total_value": holdings_value,
@@ -108,7 +121,7 @@ def run_analytics(transactions, base_currency, benchmark_symbol, date_range="ALL
             })
             
     else:
-        holdings = {asset: 0.0 for asset in assets if asset != benchmark_symbol}
+        holdings = {asset: 0.0 for asset in portfolio_assets}
         cash = 0.0
         
         portfolio_values = []
@@ -177,6 +190,10 @@ def run_analytics(transactions, base_currency, benchmark_symbol, date_range="ALL
                 "total_value": total_value,
                 "cash_flow": daily_cash_flow
             })
+
+    daily_results = [row for row in daily_results if row["total_value"] > 0]
+    if len(daily_results) < 2:
+        return {"ok": False, "error": "Not enough historical price data for this date range."}
 
     # Calculate Time-Weighted Return (TWR) Index
     # TWR index starts at 100

@@ -5,11 +5,17 @@ import { useTranslation } from "@/i18n";
 import { motion } from "framer-motion";
 import React from "react";
 import {
+  Area,
+  AreaChart,
   Cell,
+  CartesianGrid,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
-  Tooltip
+  Tooltip,
+  XAxis,
+  YAxis
 } from "recharts";
 import {
   AllocationSlice,
@@ -98,11 +104,7 @@ export default function PortfolioTrackerTab({
     [reality]
   );
   const capitalInvestedBase = React.useMemo(
-    () =>
-      (reality?.holdings ?? []).reduce(
-        (sum, holding) => sum + holding.averageCost * holding.amount * holding.fxRate,
-        0
-      ),
+    () => reality?.capitalInvestedBase ?? 0,
     [reality]
   );
 
@@ -140,6 +142,10 @@ export default function PortfolioTrackerTab({
   const healthScore = React.useMemo(
     () => calculateHealthScore(reality, optimizedWeights),
     [reality, optimizedWeights]
+  );
+  const distributionStats = React.useMemo(
+    () => buildRealityDistributionStats(reality),
+    [reality]
   );
 
   React.useEffect(() => {
@@ -444,6 +450,96 @@ export default function PortfolioTrackerTab({
             <RiskMetricCard label={t("reality.healthScore")} value={healthScore === null ? "N/A" : `${healthScore}/100`} tone={healthScore === null || healthScore >= 75 ? "success" : healthScore >= 50 ? "warning" : "danger"} detail={t("reality.vsTarget")} />
           </section>
 
+          <section className="rounded-lg border-2 border-[var(--border)] bg-[var(--panel)] p-5 shadow-[8px_8px_0_var(--shadow)]">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="font-mono text-[13px] font-bold uppercase text-[var(--secondary)]">
+                  {t("reality.distribution.title")}
+                </p>
+                <h2 className="mt-1 text-[27px] font-black">
+                  {t("reality.distribution.subtitle")}
+                </h2>
+              </div>
+              {distributionStats ? (
+                <div className="rounded border-2 border-[var(--border)] bg-[var(--primary)] px-3 py-2 font-mono text-[13px] font-black text-[#1C293C]">
+                  {t("reality.distribution.assumption")}
+                </div>
+              ) : null}
+            </div>
+
+            {distributionStats ? (
+              <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="h-[280px] rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-3">
+                  <ResponsiveContainer height="100%" width="100%">
+                    <AreaChart
+                      data={distributionStats.curve}
+                      margin={{ top: 12, right: 18, bottom: 8, left: 4 }}
+                    >
+                      <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" />
+                      <XAxis
+                        dataKey="returnValue"
+                        tickFormatter={(value) => `${Number(value).toFixed(0)}%`}
+                        type="number"
+                      />
+                      <YAxis hide type="number" />
+                      <Tooltip
+                        content={(props) => (
+                          <RealityDistributionTooltip
+                            {...props}
+                            t={t}
+                          />
+                        )}
+                      />
+                      <ReferenceLine stroke="var(--border)" strokeWidth={2} x={0} />
+                      <Area
+                        dataKey="lossDensity"
+                        fill="var(--danger)"
+                        fillOpacity={0.34}
+                        isAnimationActive={false}
+                        stroke="var(--danger)"
+                        strokeWidth={2}
+                        type="monotone"
+                      />
+                      <Area
+                        dataKey="profitDensity"
+                        fill="var(--success)"
+                        fillOpacity={0.36}
+                        isAnimationActive={false}
+                        stroke="var(--success)"
+                        strokeWidth={2}
+                        type="monotone"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[320px] border-collapse text-left">
+                    <tbody>
+                      {distributionStats.rows.map((row) => (
+                        <tr key={row.labelKey} className="border-b-2 border-[var(--border)]">
+                          <th className="py-3 pr-3 font-mono text-[13px] uppercase">
+                            {t(row.labelKey)}
+                          </th>
+                          <td className="py-3 text-right text-[18px] font-black">
+                            {row.value}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-3 text-[13px] font-bold leading-relaxed text-[var(--muted)]">
+                    {t("reality.distribution.note")}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 flex min-h-[180px] items-center justify-center rounded border-2 border-[var(--border)] bg-[var(--panel-soft)] p-4 text-center font-mono text-[15px] font-bold">
+                {t("reality.distribution.empty")}
+              </div>
+            )}
+          </section>
+
           <section className="grid gap-6 xl:grid-cols-2">
             <PiePanel title={t("reality.currentWeights")} data={reality?.currentWeights ?? []} emptyLabel={t("reality.noAllocation")} />
             <PiePanel title={t("reality.optimizedWeights")} data={optimizedSlices} emptyLabel={t("reality.noAllocation")} />
@@ -598,6 +694,128 @@ function LedgerHeader({ label }: { label: string }) {
       <span className="block font-mono text-[13px] font-black uppercase">{label}</span>
     </th>
   );
+}
+
+function RealityDistributionTooltip({
+  active,
+  label,
+  payload,
+  t
+}: {
+  active?: boolean;
+  label?: number | string;
+  payload?: Array<{
+    dataKey?: string | number;
+    value?: unknown;
+  }>;
+  t: TranslateFn;
+}) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  const isProfit = payload.some(
+    (item) => item.dataKey === "profitDensity" && item.value !== null
+  );
+
+  return (
+    <div className="rounded border-2 border-[var(--border)] bg-[var(--panel)] p-3 shadow-[4px_4px_0_var(--shadow)]">
+      <p className="font-mono text-[13px] font-black">
+        {t("reality.distribution.returnLabel", {
+          value: `${Number(label).toFixed(1)}%`
+        })}
+      </p>
+      <p
+        className={`mt-1 font-mono text-[13px] font-black ${
+          isProfit ? "text-[var(--success)]" : "text-[var(--danger)]"
+        }`}
+      >
+        {t("reality.distribution.outcome")}:{" "}
+        {isProfit
+          ? t("reality.distribution.outcomeProfit")
+          : t("reality.distribution.outcomeLoss")}
+      </p>
+    </div>
+  );
+}
+
+function buildRealityDistributionStats(reality: PortfolioRealityPayload | null) {
+  const capitalInvestedBase = reality?.capitalInvestedBase ?? 0;
+  if (!reality || capitalInvestedBase <= 0) {
+    return null;
+  }
+
+  const mean = reality.totalPnLBase / capitalInvestedBase;
+  const stdDev = (reality.riskMetrics.currentVolatility ?? 0) / 100;
+  if (!Number.isFinite(mean) || !Number.isFinite(stdDev) || stdDev <= 0) {
+    return null;
+  }
+
+  const lossProbability = normalCdf(0, mean, stdDev);
+  const profitProbability = 1 - lossProbability;
+  const minReturn = mean - stdDev * 3;
+  const maxReturn = mean + stdDev * 3;
+  const step = (maxReturn - minReturn) / 80;
+  const curve = Array.from({ length: 81 }, (_, index) => {
+    const returnValue = minReturn + step * index;
+    const density = normalPdf(returnValue, mean, stdDev);
+
+    return {
+      returnValue: returnValue * 100,
+      lossDensity: returnValue < 0 ? density : null,
+      profitDensity: returnValue >= 0 ? density : null
+    };
+  });
+
+  return {
+    curve,
+    rows: [
+      {
+        labelKey: "reality.distribution.expectedReturn",
+        value: formatDecimalPercent(mean)
+      },
+      {
+        labelKey: "reality.distribution.volatility",
+        value: formatUnsignedDecimalPercent(stdDev)
+      },
+      {
+        labelKey: "reality.distribution.profitProbability",
+        value: formatUnsignedDecimalPercent(profitProbability)
+      },
+      {
+        labelKey: "reality.distribution.lossProbability",
+        value: formatUnsignedDecimalPercent(lossProbability)
+      }
+    ]
+  };
+}
+
+function normalPdf(value: number, mean: number, stdDev: number) {
+  const z = (value - mean) / stdDev;
+  return Math.exp(-0.5 * z * z) / (stdDev * Math.sqrt(2 * Math.PI));
+}
+
+function normalCdf(value: number, mean: number, stdDev: number) {
+  return 0.5 * (1 + erf((value - mean) / (stdDev * Math.SQRT2)));
+}
+
+function erf(value: number) {
+  const sign = value < 0 ? -1 : 1;
+  const x = Math.abs(value);
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+  const t = 1 / (1 + p * x);
+  const y =
+    1 -
+    (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) *
+      t *
+      Math.exp(-x * x);
+
+  return sign * y;
 }
 
 function RiskMetricCard({
@@ -976,6 +1194,14 @@ function getTransactionPnl(
 
 function formatPercent(value: number | null) {
   return value === null ? "-" : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function formatDecimalPercent(value: number) {
+  return `${value >= 0 ? "+" : ""}${(value * 100).toFixed(2)}%`;
+}
+
+function formatUnsignedDecimalPercent(value: number) {
+  return `${(value * 100).toFixed(2)}%`;
 }
 
 function formatTransactionPnl(

@@ -2,6 +2,7 @@
 .next/
 node_modules/
 .npm-cache/
+.venv/
 data/
 *.db
 *.sqlite

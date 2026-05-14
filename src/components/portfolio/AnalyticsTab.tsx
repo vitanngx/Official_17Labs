@@ -38,7 +38,6 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
   const [benchmark, setBenchmark] = useState("SPY");
   const [customBenchmark, setCustomBenchmark] = useState("");
   const [dateRange, setDateRange] = useState("ALL");
-  const [mode, setMode] = useState<"ACTUAL" | "BACKTEST">("ACTUAL");
   const ranges = ["1M", "3M", "6M", "YTD", "1Y", "5Y", "ALL"];
 
   useEffect(() => {
@@ -70,7 +69,7 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
         const analyticsRes = await fetch("/api/portfolio/analytics", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ benchmark, baseCurrency: baseCurr, dateRange, mode })
+          body: JSON.stringify({ benchmark, baseCurrency: baseCurr, dateRange, mode: "BACKTEST" })
         });
         const analyticsData = await analyticsRes.json();
         if (analyticsRes.ok && analyticsData.ok) {
@@ -88,15 +87,22 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
       }
     }
     fetchAnalytics();
-  }, [benchmark, dateRange, mode, reality, onNotify, t]);
+  }, [benchmark, dateRange, reality, onNotify, t]);
 
   const chartData = useMemo(() => {
     if (!analytics || !analytics.dates) return [];
-    return analytics.dates.map((date, idx) => ({
-      date,
-      portfolio: analytics.portfolio[idx],
-      benchmark: analytics.benchmark[idx]
-    }));
+    return analytics.dates
+      .map((date, idx) => {
+        const portfolio = analytics.portfolio[idx];
+        const benchmarkValue = analytics.benchmark[idx];
+
+        return {
+          date,
+          portfolio,
+          benchmark: Number.isFinite(benchmarkValue) ? benchmarkValue : undefined
+        };
+      })
+      .filter((point) => Number.isFinite(point.portfolio) && point.portfolio > 0);
   }, [analytics]);
 
   if (loading) {
@@ -135,11 +141,13 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
     .sort((a, b) => a.totalPnLBase - b.totalPnLBase);
 
   const renderSummary = () => {
-    if (!analytics || !analytics.dates || analytics.dates.length === 0) return null;
-    const portStart = analytics.portfolio[0];
-    const portEnd = analytics.portfolio[analytics.portfolio.length - 1];
-    const benchStart = analytics.benchmark_ok !== false ? analytics.benchmark[0] : 100;
-    const benchEnd = analytics.benchmark_ok !== false ? analytics.benchmark[analytics.benchmark.length - 1] : 100;
+    if (!analytics || chartData.length === 0) return null;
+    const firstPoint = chartData[0];
+    const lastPoint = chartData[chartData.length - 1];
+    const portStart = firstPoint.portfolio;
+    const portEnd = lastPoint.portfolio;
+    const benchStart = analytics.benchmark_ok !== false ? firstPoint.benchmark ?? 100 : 100;
+    const benchEnd = analytics.benchmark_ok !== false ? lastPoint.benchmark ?? 100 : 100;
 
     const portRet = (portEnd - portStart) / portStart;
     const benchRet = (benchEnd - benchStart) / benchStart;
@@ -148,7 +156,7 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
     return (
       <div className="mb-4 flex flex-wrap gap-6 rounded border-2 border-[var(--border)] bg-[var(--surface)] p-3 shadow-inner">
         <div>
-          <p className="font-mono text-[10px] font-bold uppercase opacity-60">Portfolio Return</p>
+          <p className="font-mono text-[10px] font-bold uppercase opacity-60">{t("analytics.portfolioReturn")}</p>
           <p className={`font-mono text-sm font-black ${portRet >= 0 ? 'text-green-500' : 'text-red-500'}`}>
             {formatPercent(portRet)}
           </p>
@@ -156,13 +164,13 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
         {analytics.benchmark_ok !== false && (
           <>
             <div>
-              <p className="font-mono text-[10px] font-bold uppercase opacity-60">Benchmark Return</p>
+              <p className="font-mono text-[10px] font-bold uppercase opacity-60">{t("analytics.benchmarkReturn")}</p>
               <p className={`font-mono text-sm font-black ${benchRet >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                 {formatPercent(benchRet)}
               </p>
             </div>
             <div>
-              <p className="font-mono text-[10px] font-bold uppercase opacity-60">Alpha</p>
+              <p className="font-mono text-[10px] font-bold uppercase opacity-60">{t("analytics.alpha")}</p>
               <p className={`font-mono text-sm font-black ${alpha >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                 {alpha >= 0 ? "+" : ""}{formatPercent(alpha)}
               </p>
@@ -170,8 +178,8 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
           </>
         )}
         <div>
-          <p className="font-mono text-[10px] font-bold uppercase opacity-60">Observations</p>
-          <p className="font-mono text-sm font-black">{analytics.dates.length} days</p>
+          <p className="font-mono text-[10px] font-bold uppercase opacity-60">{t("analytics.observations")}</p>
+          <p className="font-mono text-sm font-black">{t("analytics.days", { count: chartData.length })}</p>
         </div>
       </div>
     );
@@ -219,24 +227,8 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
             <h2 className="text-xl font-black">{t("analytics.navChartTitle") || "Performance vs Benchmark"}</h2>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-sm font-bold opacity-70">
-                {mode === "ACTUAL" 
-                  ? (t("analytics.navChartDesc") || "Time-Weighted Return (TWR) Indexed to 100")
-                  : (t("analytics.backtestDesc") || "Current Mix Simulated Historical Performance")}
+                {t("analytics.backtestDesc") || "Current Mix Simulated Historical Performance"}
               </p>
-              <div className="flex items-center rounded border-2 border-[var(--border)] bg-[var(--surface)] text-[10px] font-black uppercase overflow-hidden">
-                <button 
-                  onClick={() => setMode("ACTUAL")} 
-                  className={`px-2 py-1 ${mode === "ACTUAL" ? "bg-[var(--primary)] text-[#1C293C]" : "opacity-60 hover:bg-[var(--panel-soft)]"}`}
-                >
-                  ACTUAL
-                </button>
-                <button 
-                  onClick={() => setMode("BACKTEST")} 
-                  className={`px-2 py-1 ${mode === "BACKTEST" ? "bg-purple-500 text-white" : "opacity-60 hover:bg-[var(--panel-soft)]"}`}
-                >
-                  BACKTEST
-                </button>
-              </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -281,7 +273,7 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
                     onClick={() => { if (customBenchmark) setBenchmark(customBenchmark); }}
                     className="bg-[var(--primary)] text-[#1C293C] px-2 font-mono text-[10px] font-black border-l-2 border-[var(--border)]"
                   >
-                    APPLY
+                    {t("analytics.apply")}
                   </button>
                 </div>
               )}
@@ -291,7 +283,7 @@ export default function AnalyticsTab({ onNotify }: AnalyticsTabProps) {
         
         {renderSummary()}
         
-        {analytics?.dates && analytics.dates.length > 0 && analytics.dates.length < 5 && (
+        {chartData.length > 0 && chartData.length < 5 && (
           <div className="mb-4 rounded border-2 border-yellow-500 bg-yellow-500/10 p-2 text-yellow-600 font-mono text-xs font-bold">
             {t("analytics.shortHistory") || "Portfolio history is short. Add older transactions to see a longer trend."}
           </div>
