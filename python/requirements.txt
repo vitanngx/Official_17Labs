@@ -2,4 +2,5 @@ numpy
 pandas
 scipy
 yfinance
+python-dotenv
 vnstock>=4.0.2

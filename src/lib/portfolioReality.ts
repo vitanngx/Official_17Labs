@@ -36,7 +36,7 @@ const COLORS = [
   "#A78BFA"
 ];
 const RISK_METRICS_TTL_MS = 24 * 60 * 60 * 1000;
-const RISK_METRICS_CACHE_VERSION = 5;
+const RISK_METRICS_CACHE_VERSION = 6;
 const RISK_LOOKBACK_YEARS = 5;
 const DEFAULT_RISK_FREE_RATE = 0.05;
 const TRADING_DAYS_PER_YEAR = 252;
@@ -148,6 +148,7 @@ export async function buildPortfolioReality(
 
   holdings.forEach((holding) => {
     holding.weightPct = totalValueBase > 0 ? (holding.marketValueBase / totalValueBase) * 100 : 0;
+    capitalInvestedBase += holding.averageCost * holding.amount * holding.fxRate;
     totalRealizedPnLBase += holding.realizedPnL * holding.fxRate;
     totalUnrealizedPnLBase += holding.unrealizedPnL * holding.fxRate;
     totalDividendsBase += holding.dividends * holding.fxRate;

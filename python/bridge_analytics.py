@@ -8,6 +8,11 @@ import contextlib
 import io
 import urllib.parse
 import urllib.request
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -17,12 +22,60 @@ COINGECKO_API_BASE = "https://api.coingecko.com/api/v3"
 COINGECKO_HEADERS = {"User-Agent": "Official17Labs/1.0"}
 COINGECKO_TOP_COIN_COUNT = 10
 
-def fetch_json(url):
-    request = urllib.request.Request(url, headers=COINGECKO_HEADERS)
+def fetch_json(url, headers=None):
+    request_headers = {
+        **COINGECKO_HEADERS,
+        **coingecko_auth_headers(),
+        **(headers or {})
+    }
+    request = urllib.request.Request(
+        url,
+        headers=request_headers
+    )
     with urllib.request.urlopen(request, timeout=20) as response:
         return json.loads(response.read().decode("utf-8"))
 
+def coingecko_auth_headers():
+    demo_key = os.getenv("COINGECKO_DEMO_API_KEY") or os.getenv("COINGECKO_API_KEY")
+    if demo_key:
+        return {"x-cg-demo-api-key": demo_key}
+    return {}
+
 def fetch_total_crypto_market_cap(start_date, end_date):
+    if not os.getenv("COINGECKO_PRO_API_KEY"):
+        return fetch_total_crypto_market_cap_proxy(start_date, end_date)
+
+    try:
+        return fetch_total_crypto_market_cap_global_chart(start_date, end_date)
+    except Exception as exc:
+        logging.warning(f"CoinGecko global market cap chart unavailable: {exc}")
+        return fetch_total_crypto_market_cap_proxy(start_date, end_date)
+
+def fetch_total_crypto_market_cap_global_chart(start_date, end_date):
+    start = pd.Timestamp(start_date).normalize()
+    end = pd.Timestamp(end_date).normalize()
+    days_back = max(1, int((end - start).days) + 2)
+    days = "max" if days_back > 3650 else str(days_back)
+    params = urllib.parse.urlencode({
+        "vs_currency": "usd",
+        "days": days
+    })
+    pro_key = os.getenv("COINGECKO_PRO_API_KEY")
+    base_url = "https://pro-api.coingecko.com/api/v3"
+    headers = {"x-cg-pro-api-key": pro_key}
+
+    data = fetch_json(f"{base_url}/global/market_cap_chart?{params}", headers)
+    points = data.get("market_cap_chart", {}).get("market_cap", [])
+    if not points:
+        raise ValueError("CoinGecko global chart returned no market cap points.")
+
+    frame = pd.DataFrame(points, columns=["timestamp", "market_cap"])
+    frame["date"] = pd.to_datetime(frame["timestamp"], unit="ms").dt.strftime("%Y-%m-%d")
+    frame = frame.dropna(subset=["market_cap"])
+    daily_market_cap = frame.groupby("date")["market_cap"].last().sort_index()
+    return daily_market_cap[(daily_market_cap.index >= start_date) & (daily_market_cap.index <= end_date)]
+
+def fetch_total_crypto_market_cap_proxy(start_date, end_date):
     start_ts = int(pd.Timestamp(start_date).timestamp())
     end_ts = int((pd.Timestamp(end_date) + pd.Timedelta(days=1)).timestamp())
 
@@ -61,15 +114,38 @@ def fetch_total_crypto_market_cap(start_date, end_date):
 def fetch_vnindex_history(start_date, end_date):
     output_buffer = io.StringIO()
     with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(output_buffer):
-        from vnstock.api.quote import Quote
+        try:
+            from vnstock import Vnstock
 
-        quote = Quote(symbol="VNINDEX", source="VCI")
-        history = quote.history(start=start_date, end=end_date, interval="1D")
+            stock = Vnstock().stock(symbol="VNINDEX", source="VCI")
+            history = stock.quote.history(start=start_date, end=end_date, interval="1D")
+        except (ImportError, AttributeError):
+            from vnstock import stock_historical_data
 
-    if history.empty or "time" not in history.columns or "close" not in history.columns:
+            history = stock_historical_data(
+                symbol="VNINDEX",
+                start_date=start_date,
+                end_date=end_date,
+                resolution="1D",
+                type="index"
+            )
+
+    if history.empty:
         return pd.Series(dtype="float64")
 
-    close = history[["time", "close"]].copy()
+    date_column = next(
+        (column for column in ("time", "date", "trading_date") if column in history.columns),
+        None
+    )
+    close_column = next(
+        (column for column in ("close", "Close") if column in history.columns),
+        None
+    )
+    if date_column is None or close_column is None:
+        return pd.Series(dtype="float64")
+
+    close = history[[date_column, close_column]].copy()
+    close.columns = ["time", "close"]
     close["date"] = pd.to_datetime(close["time"]).dt.strftime("%Y-%m-%d")
     close = close.dropna(subset=["close"])
     return close.groupby("date")["close"].last().sort_index()

@@ -57,9 +57,23 @@ export async function POST(request: NextRequest) {
 
 function runOptimizerBridge(payload: unknown): Promise<unknown> {
   if (OPTIMIZER_API_URL) {
-    return runOptimizerApi(payload);
+    return runOptimizerApi(payload).catch((error) => {
+      if (isOptimizerApiUnavailable(error)) {
+        console.warn(
+          "Optimizer API unavailable; falling back to Python bridge:",
+          error instanceof Error ? error.message : error
+        );
+        return runOptimizerProcess(payload);
+      }
+
+      throw error;
+    });
   }
 
+  return runOptimizerProcess(payload);
+}
+
+function runOptimizerProcess(payload: unknown): Promise<unknown> {
   const scriptPath = path.join(process.cwd(), "python", "bridge_optimizer.py");
 
   return new Promise((resolve, reject) => {
@@ -127,6 +141,16 @@ function runOptimizerBridge(payload: unknown): Promise<unknown> {
     child.stdin.write(JSON.stringify(payload));
     child.stdin.end();
   });
+}
+
+function isOptimizerApiUnavailable(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return /fetch failed|timed out|ECONNREFUSED|ECONNRESET|ENOTFOUND/i.test(
+    error.message
+  );
 }
 
 async function runOptimizerApi(payload: unknown) {

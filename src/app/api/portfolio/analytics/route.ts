@@ -6,7 +6,8 @@ import { listTransactions, getMarketCache, setMarketCache } from "@/lib/realityD
 import { createHash } from "node:crypto";
 
 const PYTHON_BIN = process.env.PYTHON_BIN?.trim() || "python3";
-const ANALYTICS_CACHE_VERSION = "v2";
+const ANALYTICS_CACHE_VERSION = "v5";
+const ANALYTICS_TIMEOUT_MS = 45_000;
 
 export interface AnalyticsResponse {
   ok: boolean;
@@ -48,9 +49,23 @@ export async function POST(request: NextRequest) {
 
     return new Promise<NextResponse>((resolve) => {
       const py = spawn(PYTHON_BIN, [pythonScript]);
+      let settled = false;
 
       let outputData = "";
       let errorData = "";
+      const timer = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        py.kill();
+        resolve(
+          NextResponse.json(
+            { ok: false, error: "Analytics computation timed out." },
+            { status: 504 }
+          )
+        );
+      }, ANALYTICS_TIMEOUT_MS);
 
       py.stdout.on("data", (data) => {
         outputData += data.toString();
@@ -61,6 +76,12 @@ export async function POST(request: NextRequest) {
       });
 
       py.on("close", (code) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+
         if (code !== 0) {
           console.error("Python bridge_analytics exited with code", code);
           console.error("stderr:", errorData);
@@ -70,7 +91,7 @@ export async function POST(request: NextRequest) {
 
         try {
           const result = JSON.parse(outputData) as AnalyticsResponse;
-          if (result.ok) {
+          if (result.ok && result.benchmark_ok !== false) {
              setMarketCache(cacheKey, result);
           }
           resolve(NextResponse.json(result));
